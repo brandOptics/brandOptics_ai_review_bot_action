@@ -91,7 +91,7 @@ runs:
       shell: bash
 
     - name: Run the AI review
-      run: python .github/scripts/bobot_review.py
+      run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
       shell: bash
       env:
         OPENAI_API_KEY:   ${{ inputs.openai_key }}
