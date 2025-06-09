@@ -6,7 +6,7 @@ from pathlib import Path
 from textwrap import dedent
 import openai
 from github import Github
-
+from textwrap import dedent
 # ── 1) SETUP ──────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
@@ -25,7 +25,18 @@ pr_number = event["pull_request"]["number"]
 full_sha  = event["pull_request"]["head"]["sha"]
 repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
+# right after you do:
+repo      = gh.get_repo(REPO_NAME)
 
+# ── Insert logo at top of comment ────────────────────────────────────
+# get the default branch (usually "main" or "master")
+default_branch = repo.default_branch
+
+# build the raw.githubusercontent URL to your asset
+img_url = (
+    f"https://raw.githubusercontent.com/"
+    f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
+)
 # ── 3) DETECT CHANGED FILES (exclude .github/) ─────────────────────────
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
@@ -50,7 +61,8 @@ flake8_report        = load_json(reports_dir / 'flake8.json')
 shellcheck_report    = load_json(reports_dir / 'shellcheck.json')
 dartanalyzer_report  = load_json(reports_dir / 'dartanalyzer.json')
 dotnet_report        = load_json(reports_dir / 'dotnet-format.json')
-
+htmlhint_report   = load_json(reports_dir / 'htmlhint.json')
+stylelint_report  = load_json(reports_dir / 'stylelint.json')
 # ── 5) HELPERS ─────────────────────────────────────────────────────────
 def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
     file_line = None
@@ -67,15 +79,65 @@ def get_patch_context(patch: str, line_no: int, ctx: int = 3) -> str:
                 if abs(file_line - line_no) <= ctx: hunk.append(line)
                 if file_line > line_no + ctx: break
     return '\n'.join(hunk)
-
+# ── LANGUAGE DETECTION ───────────────────────────────────────────────────
+def detect_language(file_path: str) -> str:
+    ext = Path(file_path).suffix.lower()
+    return {
+        '.dart':       'Dart/Flutter',
+        '.ts':         'TypeScript/Angular',
+        '.js':         'JavaScript/React',
+        '.jsx':        'JavaScript/React',
+        '.tsx':        'TypeScript/React',
+        '.py':         'Python',
+        '.java':       'Java',
+        '.cs':         '.NET C#',
+        '.go':         'Go',
+        '.html':       'HTML',
+        '.htm':        'HTML',
+        '.css':        'CSS',
+        '.scss':       'SCSS/Sass',
+        '.less':       'Less',
+        # add more as needed…
+    }.get(ext, 'general programming')
+# add this near the top, alongside detect_language()
+FENCE_BY_LANG = {
+    'Dart/Flutter':     'dart',
+    'TypeScript/Angular':'ts',
+    'JavaScript/React': 'js',
+    'TypeScript/React': 'ts',
+    'Python':           'python',
+    'Java':             'java',
+    '.NET C#':          'csharp',
+    'Go':               'go',
+    'HTML':             'html',
+    'CSS':              'css',
+    'SCSS/Sass':        'scss',
+    'Less':             'less',
+    'general programming': ''
+}
 # ── 6) AI SUGGESTION ───────────────────────────────────────────────────
 def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
+    lang = detect_language(file_path)
     prompt = dedent(f"""
-You are a Dart/Flutter expert.
-Below is the diff around line {line_no} in `{file_path}` (error: {code}):
+You are a highly experienced {lang} code reviewer and software architect.
+
+You will carefully analyze the provided code diff to identify **any and all issues** — not just the reported error. 
+Check for:
+- Syntax errors
+- Logic issues
+- Naming conventions
+- Code style and formatting
+- Readability and maintainability
+- Code structure and clarity
+- Performance optimizations
+- Security considerations
+- {lang} best practices
+- Modern {lang} idioms
+- API misuse or potential bugs
+
+Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
 ```diff
 {patch_ctx}
-```
 Provide exactly three labeled sections:
 
 Fix:
@@ -85,9 +147,14 @@ Refactor:
 Why:
   Brief rationale.
 """)
+    system_prompt = (
+    f"You are a senior {lang} software architect and code reviewer. "
+    "You provide in-depth, actionable feedback, "
+    "catching syntax, style, performance, security, naming, and {lang} best practices."
+)
     resp = openai.chat.completions.create(
         model='gpt-4o-mini',
-        messages=[{'role':'system','content':'You are a helpful assistant.'},
+        messages=[{'role':'system','content':system_prompt},
                   {'role':'user','content':prompt}],
         temperature=0.0,
         max_tokens=400
@@ -144,6 +211,35 @@ if isinstance(dotnet_report, dict):
                                                            'code':'DotNetFormat',
                                                            'message':d.get('Message','')})
 
+# ── 7b) COLLECT HTMLHint ISSUES ────────────────────────────────────────
+if isinstance(htmlhint_report, list):
+    for ent in htmlhint_report:
+        path = os.path.relpath(ent.get('file', ''))
+        ln   = ent.get('line', None)
+        msg  = ent.get('message', '')
+        rule = ent.get('rule', 'HTMLHint')
+        if path in changed_files and ln:
+            issues.append({
+                'file':    path,
+                'line':    ln,
+                'code':    rule,
+                'message': msg
+            })
+
+# ── 7c) COLLECT Stylelint ISSUES ──────────────────────────────────────
+if isinstance(stylelint_report, list):
+    for rep in stylelint_report:
+        path = os.path.relpath(rep.get('source', ''))
+        ln   = rep.get('line', None)
+        msg  = rep.get('text', '')
+        rule = rep.get('rule', 'Stylelint')
+        if path in changed_files and ln:
+            issues.append({
+                'file':    path,
+                'line':    ln,
+                'code':    rule,
+                'message': msg
+            })
 # ── 8) GROUP AND FORMAT OUTPUT ─────────────────────────────────────────
 file_groups = {}
 for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
@@ -151,20 +247,29 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 # Header with summary
 # at the top of your comment body…
 
- 
-md = [
-    '## 🔮🧠 brandOptics AI Neural Nexus Recommendations & Code Review Suggestions',
-    f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).',
-    ''
-]
 
+md = []
+
+# Prepend your logo
+md.append(f'<img src="{img_url}" width="100" height="100" />')
+md.append('')
+# Title on its own line
+md.append('# brandOptics AI Neural Nexus')
+md.append('')
+# Blank line between title and summary
+md.append('## Recommendations & Review Suggestions')
+md.append('')
+# Summary on its own line
+md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).')
+md.append('')
+# Blank line to separate from the rest of the content
+ 
 # Troll Section
 troll_prompt = dedent("""
 Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
 Requirements:
 - Make it DIFFERENT each time you write it
 - It can involve Developers, QA, Management, or any other team
-- It can involve code, coffee, meetings, office life, or totally absurd things
 - Keep it SHORT (max 5 lines)
 - Use plenty of fun emojis
 - Do NOT always repeat the same joke style — be creative!
@@ -186,7 +291,7 @@ md.append("> 🎭 _Prank War Dispatch:_")    # ← use '>' for blockquotes
 for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
 md.append("---")
-
+ 
 
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"**File =>** `{file_path}`")
@@ -196,45 +301,58 @@ for file_path, file_issues in sorted(file_groups.items()):
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
-    for it in sorted(file_issues, key=lambda x: x['line']):
-        ln = it['line']
-        issue_md = f"`{it['code']}` {it['message']}"
-        ctx = get_patch_context(patch, ln)
-        ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
-        m = re.search(r'Fix:\s*```dart\n([\s\S]*?)```', ai_out)
-        full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
-        lines = full_fix.splitlines()
-        # richer summary: first three lines
-        summary = ' '.join(lines[:3]).replace('|','\\|')
-        md.append(f"| {ln} | {issue_md} | `{summary}` |")
-        details.append((ln, full_fix, ai_out))
+for it in sorted(file_issues, key=lambda x: x['line']):
+    ln = it['line']
+    issue_md = f"`{it['code']}` {it['message']}"
+    ctx = get_patch_context(patch, ln)
+    ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
+
+    # 1) determine fence based on file_path
+    lang = detect_language(file_path)
+    fence = FENCE_BY_LANG.get(lang, '')
+
+    # 2) extract the “Fix:” section regardless of fence label
+    fence_re = fence or r'\w*'
+    m = re.search(rf'Fix:\s*```{fence_re}\n([\s\S]*?)```', ai_out)
+    full_fix = m.group(1).strip() if m else ai_out.splitlines()[0].strip()
+
+    lines = full_fix.splitlines()
+    summary = ' '.join(lines[:3]).replace('|','\\|')
+    md.append(f"| {ln} | {issue_md} | `{summary}` |")
+    details.append((ln, full_fix, ai_out))
+
+md.append('')
+for ln, full_fix, ai_out in details:
+    md.append('<details>')
+    md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> — click to view</summary>')
     md.append('')
-    for ln, full_fix, ai_out in details:
-        md.append('<details>')
-        md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> ---------------- (click to view)</summary>')
+
+    # Use f-string here so {fence} is replaced
+    md.append(f'```{fence}' if fence else '```')
+    md.append(full_fix)
+    md.append('```')
+    md.append('')
+
+    ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
+    if ref:
+        md.append('**Refactor:**')
+        md.append(ref.group(1).strip())
         md.append('')
-        md.append('```dart')
-        md.append(full_fix)
-        md.append('```')
-        md.append('')
-        # Refactor section
-        ref = re.search(r'Refactor:\s*([\s\S]*?)(?=\nWhy:|$)', ai_out)
-        if ref:
-            md.append('**Refactor:**')
-            md.append(ref.group(1).strip())
-            md.append('')
- 
-        md.append('')
-        md.append('</details>')
-        md.append('')
+
+    md.append('</details>')
+    md.append('')
 if not issues:
     
-    md.append(
-        ' 🧠✅ BrandOptics Neural AI Review: '
-        'No issues found—your code passes all lint checks, follows best practices, '
-        'and is performance-optimized. 🚀 Great job, developer! Ready to merge!'
-    )
+    # 1) image on its own line
+    md.append(f'<img src="{img_url}" width="100" height="100" />')
+    md.append('')
+    md.append('# brandOptics Neural AI Review:')
+    md.append('')
+    # 4) summary text
+    md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
 
+    # 5) another blank line before whatever comes next
+    md.append('')
     # Generate a quick AI‐driven developer joke
     joke_resp = openai.chat.completions.create(
         model='gpt-4o-mini',
@@ -246,7 +364,7 @@ if not issues:
         max_tokens=40
     )
     joke = joke_resp.choices[0].message.content.strip()
-
+    md.append  ('---')
     # Append the joke under the success message
     md.append(f'💬 Joke for you: {joke}')
 
@@ -257,28 +375,33 @@ total_issues = len(issues)
 files_affected = len(file_groups)
 
 if issues:
+
+
     pr.create_review(
-    body= f"""
-🧠✨ **brandOptics AI Neural Nexus**  
-Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
+        body=dedent(f"""
+    <img src="{img_url}" width="100" height="100" /> 
 
-👏 **Appreciation**  
-Thank you for your hard work—your contribution is on the right track!
+    # brandOptics AI Neural Nexus   
+    
+    ## Review: 🚧 Action Required
 
-🔍 **Review Summary**  
-1. **Errors & Warnings**: Resolve any compile/runtime errors and lint warnings.  
-2. **Style & Conventions**: Ensure consistency in naming, formatting, and team guidelines.  
-3. **Maintainability**: Simplify complex blocks, remove dead code, and write clear comments.  
-4. **Performance & Security**: Optimize hot paths, manage resources correctly, and validate inputs.  
-5. **Testing & Documentation**: Add or update tests and inline documentation for clarity.
+    Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
+    Thanks for your contribution! A few tweaks are needed before we can merge.
 
-💡 **Pro Tip**  
-Break large modules into smaller, single-responsibility components to improve readability and testability.
+    🔍 **Key Findings**  
+    1. **Errors & Warnings:** Address any compilation errors or lint violations.  
+    2. **Consistency:** Update naming and formatting to match project conventions.  
+    3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
+    4. **Performance & Security:** Optimize hotspots and ensure all inputs are validated.  
+    5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
 
-Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
-""",
-    event="REQUEST_CHANGES"
-)
+    💡 **Pro Tip**  
+    Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
+
+    Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
+    """),
+        event="REQUEST_CHANGES"
+    )
 
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",

@@ -15,89 +15,147 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      # ── 1) CHECKOUT THE CODE ────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
+      # ── 2) SET UP PYTHON ────────────────────────────────────────────────
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install openai PyGithub flake8 flake8-json
-      shell: bash
+      # ── 3) INSTALL PYTHON DEPENDENCIES ─────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai PyGithub flake8 flake8-json
+        shell: bash
+      # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
+      - name: Set up Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install ESLint
+        run: npm install -g eslint
+        shell: bash
+      # ── 5) INSTALL SHELLCHECK ──────────────────────────────────────────
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+        shell: bash
+      # ── 6) INSTALL .NET SDK ────────────────────────────────────────────
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "7.0.x"
 
-    - name: Set up Node & ESLint
-      uses: actions/setup-node@v4
-      with:
-        node-version: "18"
+      # ── 7) INSTALL dotnet-format & PRODUCE JSON ────────────────────────
+      - name: Install dotnet-format
+        run: dotnet tool install -g dotnet-format
+        shell: bash
+      - name: Run dotnet-format
+        run: |
+          dotnet format --verify-no-changes --report .github/linter-reports/dotnet-format.json || true
+        shell: bash
+      # ── 8) INSTALL FLUTTER SDK ─────────────────────────────────────────
+      - name: Install Flutter SDK (stable channel)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
 
-    - name: Install ESLint
-      run: npm install -g eslint
-      shell: bash
+      # ── 9) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
+      - name: Create linter-reports directory
+        run: mkdir -p .github/linter-reports
+        shell: bash
+      # ── 10) RUN ESLINT (JS/TS/React/Angular) ───────────────────────────
+      - name: Run ESLint
+        run: |
+          FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
+          if [ -n "$FILES" ]; then
+            eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
+              --format json \
+              --output-file .github/linter-reports/eslint.json || true
+          fi
+        shell: bash
+      # ── 11) RUN FLAKE8 (Python) ────────────────────────────────────────
+      - name: Run Flake8
+        run: |
+          FILES=$(find . -type f -name "*.py")
+          if [ -n "$FILES" ]; then
+            flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
+          fi
+        shell: bash
+      # ── 12) RUN STYLELINT (CSS/SCSS/LESS) ─────────────────────────────
+      - name: Install Stylelint
+        run: npm install -g stylelint stylelint-config-standard
+        shell: bash
+      - name: Run Stylelint
+        run: |
+          FILES=$(find . -type f \( -name "*.css" -o -name "*.scss" -o -name "*.less" \))
+          if [ -n "$FILES" ]; then
+            stylelint "**/*.{css,scss,less}" \
+              --formatter json \
+              --output-file .github/linter-reports/stylelint.json || true
+          fi
+        shell: bash
 
-    - name: Install ShellCheck
-      run: |
-        sudo apt-get update && sudo apt-get install -y shellcheck
-      shell: bash
+      # ── 13) RUN HTMLHINT (HTML) ────────────────────────────────────────
+      - name: Install HTMLHint
+        run: npm install -g htmlhint
+        shell: bash
+      - name: Run HTMLHint
+        run: |
+          FILES=$(find . -type f -name "*.html")
+          if [ -n "$FILES" ]; then
+            htmlhint --format json **/*.html > .github/linter-reports/htmlhint.json || true
+          fi
+        shell: bash
 
-    - name: Set up .NET SDK
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: "7.0.x"
+      # ── 14) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
+      - name: Run ShellCheck
+        run: |
+          FILES=$(find . -type f -name "*.sh")
+          if [ -n "$FILES" ]; then
+            find . -type f -name "*.sh" \
+              | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
+          fi
+        shell: bash
 
-    - name: Install Flutter SDK
-      uses: subosito/flutter-action@v2
-      with:
-        channel: stable
+      # ── 15) FETCH DART/FLUTTER DEPENDENCIES ────────────────────────────
+      - name: Fetch dependencies for Flutter/Dart
+        run: |
+          if [ -f "pubspec.yaml" ]; then
+            flutter pub get
+          fi
+        shell: bash
 
-    - name: Prepare linter-reports folder
-      run: mkdir -p .github/linter-reports
-      shell: bash
+      # ── 16) RUN FLUTTER/DART ANALYZER ──────────────────────────────────
+      - name: Run Dart/Flutter Analyzer
+        run: |
+          if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
+            dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
+          else
+            echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
+          fi
+        shell: bash
 
-    - name: Run ESLint (JS/TS/React/Angular)
-      run: |
-        eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
-          --format json \
-          --output-file .github/linter-reports/eslint.json || true
-      shell: bash
+      # ── 17) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ───────────────────
+      - name: Dump first lines of analyzer JSON
+        run: |
+          echo "=== begin dartanalyzer.json ==="
+          head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
+          echo "=== end dartanalyzer.json ==="
+        shell: bash
 
-    - name: Run Flake8 (Python)
-      run: |
-        flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
-      shell: bash
 
-    - name: Run ShellCheck (Shell scripts)
-      run: |
-        find . -type f -name "*.sh" \
-          | xargs -I {} sh -c "shellcheck -f json {} >> .github/linter-reports/shellcheck.json" || true
-      shell: bash
-
-    - name: Fetch dependencies (Flutter/Dart)
-      run: |
-        if [ -f "pubspec.yaml" ]; then
-          flutter pub get
-        fi
-      shell: bash
-
-    - name: Run Dart/Flutter Analyzer
-      run: |
-        if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
-          dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
-        else
-          echo '{"diagnostics":[]}' > .github/linter-reports/dartanalyzer.json
-        fi
-      shell: bash
-
-    - name: Run the AI review
-      run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
-      shell: bash
-      env:
-        OPENAI_API_KEY:   ${{ inputs.openai_key }}
-        GITHUB_TOKEN:     ${{ inputs.github_token }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_EVENT_PATH: ${{ github.event_path }}
+      - name: Run the AI review
+        run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
+        shell: bash
+        env:
+          OPENAI_API_KEY:   ${{ inputs.openai_key }}
+          GITHUB_TOKEN:     ${{ inputs.github_token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
