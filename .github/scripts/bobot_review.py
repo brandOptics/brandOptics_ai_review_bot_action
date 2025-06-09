@@ -256,14 +256,19 @@ md.append('')
 # Title on its own line
 md.append('# brandOptics AI Neural Nexus')
 md.append('')
+if not file_groups:
+    # No issues anywhere
+    md.append("No issues found—your code is green! 🚀\n You’re all set to merge. 🎉")
+else: 
 # Blank line between title and summary
-md.append('## Recommendations & Review Suggestions')
+    md.append('## Recommendations & Review Suggestions')
 md.append('')
 # Summary on its own line
 md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).')
 md.append('')
 # Blank line to separate from the rest of the content
- 
+# 2) Early-exit if there are no files to report on
+
 # Troll Section
 troll_prompt = dedent("""
 Invent a completely new, funny, over-the-top **office prank or office troll** that could happen at a software company.
