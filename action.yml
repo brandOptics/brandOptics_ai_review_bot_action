@@ -1,7 +1,7 @@
 name: "brandOptics AI Code Review"
 description: "Runs the brandOptics AI neural-intelligence engine against your PR."
 branding:
-  icon: "zap"     
+  icon: "zap"     # for branding purposes, use a simple icon
   color: "green"   
 
 inputs:

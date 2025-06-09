@@ -256,12 +256,9 @@ md.append('')
 # Title on its own line
 md.append('# brandOptics AI Neural Nexus')
 md.append('')
-if not file_groups:
-    # No issues anywhere
-    md.append("No issues found—your code is green! 🚀\n You’re all set to merge. 🎉")
-else: 
+ 
 # Blank line between title and summary
-    md.append('## Recommendations & Review Suggestions')
+md.append('## Recommendations & Review Suggestions')
 md.append('')
 # Summary on its own line
 md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).')
@@ -297,7 +294,7 @@ for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
 md.append("---")
  
-
+details = []  
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"**File =>** `{file_path}`")
     md.append('')
@@ -306,8 +303,9 @@ for file_path, file_issues in sorted(file_groups.items()):
     gh_file = next(f for f in pr.get_files() if f.filename == file_path)
     patch = gh_file.patch or ''
     details = []
-for it in sorted(file_issues, key=lambda x: x['line']):
-    ln = it['line']
+    if 'file_issues' in locals() and file_issues:
+        for it in sorted(file_issues, key=lambda x: x['line']):
+            ln = it['line']
     issue_md = f"`{it['code']}` {it['message']}"
     ctx = get_patch_context(patch, ln)
     ai_out = ai_suggest_fix(it['code'], ctx, file_path, ln)
@@ -327,8 +325,9 @@ for it in sorted(file_issues, key=lambda x: x['line']):
     details.append((ln, full_fix, ai_out))
 
 md.append('')
-for ln, full_fix, ai_out in details:
-    md.append('<details>')
+if details:
+    for ln, full_fix, ai_out in details:
+        md.append('<details>')
     md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> — click to view</summary>')
     md.append('')
 
@@ -347,13 +346,13 @@ for ln, full_fix, ai_out in details:
     md.append('</details>')
     md.append('')
 if not issues:
-    
+    md.clear()
     # 1) image on its own line
     md.append(f'<img src="{img_url}" width="100" height="100" />')
     md.append('')
     md.append('# brandOptics Neural AI Review:')
     md.append('')
-    # 4) summary text
+ 
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
 
     # 5) another blank line before whatever comes next
