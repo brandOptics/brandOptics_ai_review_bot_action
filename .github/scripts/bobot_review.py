@@ -12,6 +12,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
 EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
+
 if not OPENAI_API_KEY or not GITHUB_TOKEN:
     print("⛔️ Missing OpenAI or GitHub token.")
     exit(1)
@@ -27,7 +28,17 @@ repo      = gh.get_repo(REPO_NAME)
 pr        = repo.get_pull(pr_number)
 # right after you do:
 repo      = gh.get_repo(REPO_NAME)
-
+dev_name = event["pull_request"]["user"]["login"]
+title        = event["pull_request"]["title"]
+body         = event["pull_request"]["body"] or "No description provided."
+url          = event["pull_request"]["html_url"]
+source_branch = event["pull_request"]["head"]["ref"]
+target_branch = event["pull_request"]["base"]["ref"]
+created_at   = event["pull_request"]["created_at"]
+commits      = event["pull_request"]["commits"]
+additions    = event["pull_request"]["additions"]
+deletions    = event["pull_request"]["deletions"]
+changed_files= event["pull_request"]["changed_files"]
 # ── Insert logo at top of comment ────────────────────────────────────
 # get the default branch (usually "main" or "master")
 default_branch = repo.default_branch
@@ -41,7 +52,20 @@ img_url = (
 changed_files = [f.filename for f in pr.get_files()
                  if f.patch and not f.filename.lower().startswith('.github/')]
 if not changed_files:
-    pr.create_issue_comment("🔮🧠 brandOptics AI Neural Nexus Review — no relevant code changes detected.")
+    pr.create_issue_comment(dedent(f"""
+<img src="{img_url}" width="100" height="100" />
+
+# brandOptics AI Neural Nexus
+
+## Review: ✅ No Relevant Changes Detected
+
+No actionable code changes were found in this PR.  
+Everything looks quiet on the commit front — nothing to analyze right now. 😌
+
+💡 **Note**  
+Make sure your changes include source code updates (excluding config/docs only) to trigger a meaningful review.
+
+"""))
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
         state="success",
@@ -115,51 +139,6 @@ FENCE_BY_LANG = {
     'Less':             'less',
     'general programming': ''
 }
-# ── 6) AI SUGGESTION ───────────────────────────────────────────────────
-def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
-    lang = detect_language(file_path)
-    prompt = dedent(f"""
-You are a highly experienced {lang} code reviewer and software architect.
-
-You will carefully analyze the provided code diff to identify **any and all issues** — not just the reported error. 
-Check for:
-- Syntax errors
-- Logic issues
-- Naming conventions
-- Code style and formatting
-- Readability and maintainability
-- Code structure and clarity
-- Performance optimizations
-- Security considerations
-- {lang} best practices
-- Modern {lang} idioms
-- API misuse or potential bugs
-
-Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
-```diff
-{patch_ctx}
-Provide exactly three labeled sections:
-
-Fix:
-  Copy-friendly corrected snippet (include fences if multi-line).
-Refactor:
-  Higher-level best-practice improvements.
-Why:
-  Brief rationale.
-""")
-    system_prompt = (
-    f"You are a senior {lang} software architect and code reviewer. "
-    "You provide in-depth, actionable feedback, "
-    "catching syntax, style, performance, security, naming, and {lang} best practices."
-)
-    resp = openai.chat.completions.create(
-        model='gpt-4o-mini',
-        messages=[{'role':'system','content':system_prompt},
-                  {'role':'user','content':prompt}],
-        temperature=0.0,
-        max_tokens=400
-    )
-    return resp.choices[0].message.content.strip()
 
 # ── 7) COLLECT ISSUES ──────────────────────────────────────────────────
 issues = []
@@ -248,6 +227,89 @@ for issue in issues: file_groups.setdefault(issue['file'], []).append(issue)
 # at the top of your comment body…
 
 
+
+
+# ── 6) AI SUGGESTION ───────────────────────────────────────────────────
+def ai_suggest_fix(code: str, patch_ctx: str, file_path: str, line_no: int) -> str:
+    lang = detect_language(file_path)
+    prompt = dedent(f"""
+You are a highly experienced {lang} code reviewer and software architect.
+
+You will carefully analyze the provided code diff to identify **any and all issues** — not just the reported error. 
+Check for:
+- Syntax errors
+- Logic issues
+- Naming conventions
+- Code style and formatting
+- Readability and maintainability
+- Code structure and clarity
+- Performance optimizations
+- Security considerations
+- {lang} best practices
+- Modern {lang} idioms
+- API misuse or potential bugs
+
+Below is the diff around line {line_no} in `{file_path}` (reported error: {code}):
+```diff
+{patch_ctx}
+Provide exactly three labeled sections:
+
+Fix:
+  Copy-friendly corrected snippet (include fences if multi-line).
+Refactor:
+  Higher-level best-practice improvements.
+Why:
+  Brief rationale.
+""")
+    system_prompt = (
+    f"You are a senior {lang} software architect and code reviewer. "
+    "You provide in-depth, actionable feedback, "
+    "catching syntax, style, performance, security, naming, and {lang} best practices."
+)
+    resp = openai.chat.completions.create(
+        model='gpt-4o-mini',
+        messages=[{'role':'system','content':system_prompt},
+                  {'role':'user','content':prompt}],
+        temperature=0.0,
+        max_tokens=400
+    )
+    return resp.choices[0].message.content.strip()
+
+rating_prompt = dedent(f"""
+You are a senior software reviewer.
+
+Evaluate the pull request submitted by @{dev_name} using the following data:
+
+- PR Title: "{title}"
+- Total Issues Detected: {len(issues)}
+- Files Affected: {len(file_groups)}
+- Total Commits: {commits}
+- Lines Added: {additions}
+- Lines Deleted: {deletions}
+
+Base your evaluation on code cleanliness, lint adherence, readability, and developer discipline. Consider if the code followed best practices, had minimal issues, and was neatly structured.
+
+Respond with:
+- A creative title (e.g., "Code Ninja", "Syntax Sorcerer", etc.)
+- A rating out of 5 stars (⭐️) — use only full stars
+- A one-liner review summary using light-hearted emojis
+
+Be motivational but fair. If there are many issues, reduce the score accordingly. If it's a clean PR, reward it well.
+""")
+rating_resp = openai.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "system", "content": "You are a playful yet insightful code reviewer."},
+        {"role": "user",   "content": rating_prompt}
+    ],
+    temperature=0.8,
+    max_tokens=120
+)
+rating = rating_resp.choices[0].message.content.strip()
+
+
+
+
 md = []
 
 # Prepend your logo
@@ -258,10 +320,34 @@ md.append('# brandOptics AI Neural Nexus')
 md.append('')
  
 # Blank line between title and summary
-md.append('## Recommendations & Review Suggestions')
-md.append('')
-md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR')
-md.append('')
+md.append("## 📌 Recommendations & Review Summary")
+md.append("")
+md.append(f"**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR.")
+md.append("")
+
+ 
+md.append(f"> 🧑‍💻 **Developer Rating for @{dev_name}**")
+for line in rating.splitlines():
+    md.append(f"> {line}")
+ 
+md.append("---")
+# PR Details
+md.append("### Pull Request Metadata")
+md.append("")
+md.append(f"- **Title:** {title}")
+md.append(f"- **PR Link:** [#{pr_number}]({url})")
+md.append(f"- **Author:** @{dev_name}")
+md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`")
+md.append(f"- **Opened On:** {created_at}")
+md.append("")
+
+# Change Statistics
+md.append("### Change Statistics")
+md.append(f"- **Commits:** {commits}")
+md.append(f"- **Lines Added:** {additions}")
+md.append(f"- **Lines Removed:** {deletions}")
+md.append(f"- **Files Changed:** {changed_files}")
+md.append("---")
 md.append("""
 Thanks for your contribution! A few tweaks are needed before we can merge.
 
@@ -344,7 +430,7 @@ md.append('')
 if details:
     for ln, full_fix, ai_out in details:
         md.append('<details>')
-    md.append(f'<summary><strong>🔍✨ Neural AI Guidance & Corrections for (Line {ln})</strong> — click to view</summary>')
+    md.append(f'<summary><strong>📎 Line {ln} – AI Suggestions & Code Insights</strong> (click to expand)</summary>')
     md.append('')
 
     # Use f-string here so {fence} is replaced
@@ -368,9 +454,32 @@ if not issues:
     md.append('')
     md.append('# brandOptics Neural AI Review:')
     md.append('')
- 
     md.append('**No issues found—your code** passes all lint checks, follows best practices, and is performance-optimized. 🚀 Great job, developer! Ready to merge!')
+    md.append('')
+    # PR Details
+    md.append("### Pull Request Metadata")
+    md.append("")
+    md.append(f"- **Title:** {title}")
+    md.append(f"- **PR Link:** [#{pr_number}]({url})")
+    md.append(f"- **Author:** @{dev_name}")
+    md.append(f"- **Branch:** `{source_branch}` → `{target_branch}`")
+    md.append(f"- **Opened On:** {created_at}")
+    md.append("")
 
+    # Change Statistics
+    md.append("### Change Statistics")
+    md.append(f"- **Commits:** {commits}")
+    md.append(f"- **Lines Added:** {additions}")
+    md.append(f"- **Lines Removed:** {deletions}")
+    md.append(f"- **Files Changed:** {changed_files}")
+    md.append('---')
+    md.append('**🏅 Developer Performance Rating**')
+    md.append('')
+    md.append(f'- 👤 **Developer:** @{dev_name}')
+    md.append('- 🏷️ **Title:** Code Maestro')
+    md.append('- ⭐⭐⭐⭐⭐')
+    md.append('- ✨ **Summary:** Clean, efficient, and merge-ready! Keep up the solid work! 💪🔥')
+    
     # 5) another blank line before whatever comes next
     md.append('')
     # Generate a quick AI‐driven developer joke
