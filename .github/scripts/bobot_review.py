@@ -260,8 +260,23 @@ md.append('')
 # Blank line between title and summary
 md.append('## Recommendations & Review Suggestions')
 md.append('')
-# Summary on its own line
-md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s).')
+md.append(f'**Summary:** {len(issues)} issue(s) across {len(file_groups)} file(s) in this PR')
+md.append('')
+md.append("""
+Thanks for your contribution! A few tweaks are needed before we can merge.
+
+🔍 **Key Findings**  
+1. **Errors & Warnings:** Address any compilation errors or lint violations.  
+2. **Consistency:** Update naming and formatting to match project conventions.  
+3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
+4. **Performance & Security:** Optimize frequently executed code blocks and ensure all inputs are validated.  
+5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
+
+💡 **Pro Tip**  
+Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
+
+Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
+""")
 md.append('')
 # Blank line to separate from the rest of the content
 # 2) Early-exit if there are no files to report on
@@ -288,11 +303,12 @@ troll_resp = openai.chat.completions.create(
 )
 troll = troll_resp.choices[0].message.content.strip()
 
-md.append("---")
+ 
 md.append("> 🎭 _Prank War Dispatch:_")    # ← use '>' for blockquotes
 for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
-md.append("---")
+ 
+md.append('## 📂 File-wise Issue Breakdown & AI Suggestions')
  
 details = []  
 for file_path, file_issues in sorted(file_groups.items()):
@@ -381,31 +397,31 @@ files_affected = len(file_groups)
 if issues:
 
 
-    pr.create_review(
-        body=dedent(f"""
-    <img src="{img_url}" width="100" height="100" /> 
+    # pr.create_review(
+    #     body=dedent(f"""
+    # <img src="{img_url}" width="100" height="100" /> 
 
-    # brandOptics AI Neural Nexus   
+    # # brandOptics AI Neural Nexus   
     
-    ## Review: 🚧 Action Required
+    # ## Review: 🚧 Action Required
 
-    Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
-    Thanks for your contribution! A few tweaks are needed before we can merge.
+    # Detected **{total_issues} issue(s)** across **{files_affected} file(s)** in this PR.
+    # Thanks for your contribution! A few tweaks are needed before we can merge.
 
-    🔍 **Key Findings**  
-    1. **Errors & Warnings:** Address any compilation errors or lint violations.  
-    2. **Consistency:** Update naming and formatting to match project conventions.  
-    3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
-    4. **Performance & Security:** Optimize hotspots and ensure all inputs are validated.  
-    5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
+    # 🔍 **Key Findings**  
+    # 1. **Errors & Warnings:** Address any compilation errors or lint violations.  
+    # 2. **Consistency:** Update naming and formatting to match project conventions.  
+    # 3. **Clarity:** Simplify complex blocks, remove unused code, and add concise comments.  
+    # 4. **Performance & Security:** Optimize hotspots and ensure all inputs are validated.  
+    # 5. **Tests & Docs:** Add or update tests for new logic and refresh any related documentation.
 
-    💡 **Pro Tip**  
-    Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
+    # 💡 **Pro Tip**  
+    # Think in small, focused changes—break large functions into single-purpose units for easier review and maintenance.
 
-    Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
-    """),
-        event="REQUEST_CHANGES"
-    )
+    # Once these tweaks are applied and you push a new commit, I’ll happily re-review and merge! 🚀
+    # """),
+    #     event="REQUEST_CHANGES"
+    # )
 
     repo.get_commit(full_sha).create_status(
         context="brandOptics AI Neural Nexus Code Review",
@@ -413,6 +429,32 @@ if issues:
         description="Issues detected—please refine your code and push updates."
     )
 else:
+     # Approve the PR to remove block
+#     pr.create_review(
+#          body=dedent(f"""
+#             <img src="{img_url}" width="100" height="100" /> 
+
+#             # brandOptics AI Neural Nexus  
+
+#             ## ✅ Review: All Clear!
+
+#             No issues detected — your code passed all checks, lint validations, and best practice scans. 🧠✨  
+#             Everything looks clean, performant, and production-ready.
+
+#             🔍 **What Was Checked**  
+#             - ✅ Compilation & Linting  
+#             - ✅ Naming, Style & Formatting  
+#             - ✅ Readability & Code Clarity  
+#             - ✅ Performance & Security Considerations  
+#             - ✅ Documentation & Test Coverage  
+
+#             💡 **Nice Work**  
+#             This is a solid PR — clean, structured, and merge-ready. 🚀
+
+#             _Approved automatically by brandOptics AI Neural Nexus._
+# """),
+#         event="APPROVE"
+#     )
     repo.get_commit(full_sha).create_status(
     context='brandOptics AI Neural Nexus Code Review',
     state='failure' if issues else 'success',
