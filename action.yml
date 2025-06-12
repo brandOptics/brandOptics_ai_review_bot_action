@@ -33,6 +33,9 @@ runs:
           python -m pip install --upgrade pip
           pip install openai PyGithub flake8 flake8-json
         shell: bash
+      - name: Install Python dependencies
+        run: pip install pytz
+        shell: bash
       # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
       - name: Set up Node 18
         uses: actions/setup-node@v4
@@ -159,3 +162,4 @@ runs:
           GITHUB_TOKEN:     ${{ inputs.github_token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
+          TARGET_TIMEZONE: Asia/Kolkata
