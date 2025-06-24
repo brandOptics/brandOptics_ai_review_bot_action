@@ -17,7 +17,7 @@ runs:
   steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      shell: bash
+      
     - id: detect
       name: Find project root and detect languages
       run: |
