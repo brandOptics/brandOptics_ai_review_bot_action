@@ -49,8 +49,7 @@ default_branch = repo.default_branch
 # Make sure the file exists at .github/assets/bailogo.png in your repo's default branch
 # And that your repository is public or the image is accessible.
 img_url = (
-    f"https://raw.githubusercontent.com/"
-    f"{REPO_NAME}/{default_branch}/.github/assets/bailogo.png"
+    f"https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png"
 )
 
 # --- Dynamic Timezone Configuration ---
@@ -565,12 +564,12 @@ if not issues:
     md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
     md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
     md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
-md.append("---")
-md.append("### 🏅 Developer Performance Rating")
-md.append("")
-md.append(">") # Start the blockquote
+    md.append("---")
+    md.append("### 🏅 Developer Performance Rating")
+    md.append("")
+    md.append(">") # Start the blockquote
 # Split the rating into its components if possible, or just iterate lines
-rating_lines = rating.splitlines()
+    rating_lines = rating.splitlines()
 
 if rating_lines:
     # Get the original first line from the AI's rating output
