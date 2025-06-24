@@ -571,39 +571,39 @@ if not issues:
 # Split the rating into its components if possible, or just iterate lines
     rating_lines = rating.splitlines()
 
-if rating_lines:
-    # Get the original first line from the AI's rating output
-    original_title_line = rating_lines[0]
- 
-    cleaned_title = re.sub(r'^\s*#+\s*Title:\s*', '', original_title_line, flags=re.IGNORECASE).strip()
+    if rating_lines:
+        # Get the original first line from the AI's rating output
+        original_title_line = rating_lines[0]
+    
+        cleaned_title = re.sub(r'^\s*#+\s*Title:\s*', '', original_title_line, flags=re.IGNORECASE).strip()
 
-    # Now append the cleaned and bolded title
-    md.append(f"> **{cleaned_title}**") # Bold the title
+        # Now append the cleaned and bolded title
+        md.append(f"> **{cleaned_title}**") # Bold the title
 
-    if len(rating_lines) > 1:
-        md.append(f"> {rating_lines[1]}") # The stars line
-    if len(rating_lines) > 2:
-        # The remaining lines are the summary message
-        # Iterate from index 2 for the message part
-        for i in range(2, len(rating_lines)):
-            md.append(f"> {rating_lines[i]}") # Append remaining lines as part of the blockquote
+        if len(rating_lines) > 1:
+            md.append(f"> {rating_lines[1]}") # The stars line
+        if len(rating_lines) > 2:
+            # The remaining lines are the summary message
+            # Iterate from index 2 for the message part
+            for i in range(2, len(rating_lines)):
+                md.append(f"> {rating_lines[i]}") # Append remaining lines as part of the blockquote
 
-    md.append("") # End the blockquote (by adding a blank line outside it)
+        md.append("") # End the blockquote (by adding a blank line outside it)
 
-    # Generate a quick AI‐driven developer joke
-    joke_resp = openai.chat.completions.create(
-        model='gpt-4o-mini',
-        messages=[
-            { "role": "system", "content": "You are a witty developer assistant. Always provide a short, fun programming joke." },
-            { "role": "user",   "content": "Tell me a short, fun programming joke about clean code reviews or developers." }
-        ],
-        temperature=0.8,
-        max_tokens=60
-    )
-    joke = joke_resp.choices[0].message.content.strip()
-    md.append('---')
-    md.append(f'💬 **Developer Humor Break:** {joke}')
-    md.append('')
+        # Generate a quick AI‐driven developer joke
+        joke_resp = openai.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                { "role": "system", "content": "You are a witty developer assistant. Always provide a short, fun programming joke." },
+                { "role": "user",   "content": "Tell me a short, fun programming joke about clean code reviews or developers." }
+            ],
+            temperature=0.8,
+            max_tokens=60
+        )
+        joke = joke_resp.choices[0].message.content.strip()
+        md.append('---')
+        md.append(f'💬 **Developer Humor Break:** {joke}')
+        md.append('')
 
 
 # --- 9) POST COMMENT & STATUS ───────────────────────────────────────────
