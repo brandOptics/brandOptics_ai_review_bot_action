@@ -73,7 +73,7 @@ runs:
       shell: bash
       run: |
         if [ "$HAS_REACT" = "true" ]; then
-          echo "Setting up Node for React"
+          echo "⚛️ Setting up Node for React"
           # curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
           # apt-get install -y nodejs
           cd "$PROJECT_ROOT"
@@ -88,7 +88,7 @@ runs:
             --max-warnings=1000 \
             --format json \
             --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
-            echo "🟠 ESLint finished with warnings"
+            echo "⚛️ ESLint finished with warnings and continued"
         else
           echo "Skipping React linting."
         fi
@@ -97,7 +97,7 @@ runs:
       shell: bash
       run: |
         if [ "$HAS_ANGULAR" = "true" ]; then
-          echo "Setting up Node for Angular"
+          echo "🛡️ Setting up Node for Angular"
           curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
           apt-get install -y nodejs
           cd "$PROJECT_ROOT"
@@ -109,13 +109,14 @@ runs:
             --format json \
             --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
         else
-          echo "Skipping Angular linting."
+          echo "🛡️ Skipping Angular linting."
         fi
 
     - name: Lint Python
       shell: bash
       run: |
         if [ "$HAS_PY" = "true" ]; then
+          echo "🐍 Setting up Python for linting"
           python -m pip install --upgrade pip
           pip install flake8 flake8-json
           cd "$PROJECT_ROOT"
@@ -124,25 +125,29 @@ runs:
             flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
           fi
         else
-          echo "Skipping Python linting."
+          echo "🐍 Skipping Python linting."
         fi
 
     - name: Lint .NET
       shell: bash
       run: |
         if [ "$HAS_DOTNET" = "true" ]; then
+          echo "🧩 Setting up .NET for linting"
           dotnet tool install -g dotnet-format
           export PATH="$PATH:$HOME/.dotnet/tools"
           cd "$PROJECT_ROOT"
           dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
         else
-          echo "Skipping .NET formatting."
+          echo "🧩 Skipping .NET formatting."
+      
+        
         fi
 
     - name: Analyze Flutter
       shell: bash
       run: |
         if [ "$HAS_FLUTTER" = "true" ]; then
+          echo "🪶 Setting up Flutter for analysis"
           git clone https://github.com/flutter/flutter.git -b stable --depth 1
           export PATH="$PWD/flutter/bin:$PATH"
           flutter doctor
@@ -150,7 +155,8 @@ runs:
           flutter pub get
           dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
         else
-          echo "Skipping Flutter analysis."
+          echo "🪶 Skipping Flutter analysis."
+        
         fi
 
     - name: Install Python deps for AI bot
