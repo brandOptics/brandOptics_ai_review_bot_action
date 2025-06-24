@@ -160,7 +160,7 @@ runs:
       shell: bash
     - name: Run the AI review
       shell: bash
-      run: python "$GITHUB_ACTION_PATH/.github/scripts/jibinbot_review.py"
+      run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
       env:
         OPENAI_API_KEY:   ${{ inputs.openai_key }}
         GITHUB_TOKEN:     ${{ inputs.github_token }}
