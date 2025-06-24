@@ -65,13 +65,17 @@ runs:
     - name: Prepare reports directory
       run: mkdir -p .github/linter-reports
       shell: bash
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
     - name: Lint React
       shell: bash
       run: |
         if [ "$HAS_REACT" = "true" ]; then
           echo "Setting up Node for React"
-          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-          apt-get install -y nodejs
+          # curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          # apt-get install -y nodejs
           cd "$PROJECT_ROOT"
           npm install --no-save \
             eslint @eslint/js \
