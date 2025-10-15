@@ -8,7 +8,7 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 
 ## 🔖 Current Version
 
-**v3.1.4** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
+**v3.1.6** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
 
 ---
 
@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v3.1.4
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3.1.6
         with:
           openai_key:   ${{ secrets.OPENAI_API_KEY }} # Need to add this as a repository secrets with the name "OPENAI_API_KEY"
           github_token: ${{ secrets.GITHUB_TOKEN }}  # Automatically provided
