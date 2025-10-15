@@ -197,7 +197,12 @@ runs:
             languageOptions: {
               ecmaVersion: "latest",
               sourceType: "module",
-              ...(tsParser ? { parser: tsParser } : {})
+              ...(tsParser ? { parser: tsParser } : {}),
+                globals: {
+                ...globals.node, 
+                  console: "readonly",
+                  process: "readonly", 
+            },
             },
             plugins: {
               import: (await import("eslint-plugin-import")).default
