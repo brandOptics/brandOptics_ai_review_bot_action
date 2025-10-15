@@ -198,8 +198,7 @@ runs:
               ecmaVersion: "latest",
               sourceType: "module",
               ...(tsParser ? { parser: tsParser } : {}),
-                globals: {
-                ...globals.node, 
+                globals: { 
                   console: "readonly",
                   process: "readonly", 
             },
