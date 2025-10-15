@@ -1,8 +1,8 @@
 name: "brandOptics AI Neural Nexus Code Review"
 description: "Runs the brandOptics AI neural-intelligence engine against your PR."
 branding:
-  icon: "zap"     # for branding purposes, use a simple icon
-  color: "green"   
+  icon: "zap"
+  color: "green"
 
 inputs:
   openai_key:
@@ -15,151 +15,161 @@ inputs:
 runs:
   using: "composite"
   steps:
-      # ── 1) CHECKOUT THE CODE ────────────────────────────────────────────
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - id: detect
+      name: Find project root and detect languages
+      run: |
+        pkg=$(find . -type f -name package.json | head -n1)
+        if [ -n "$pkg" ]; then
+          root=$(dirname "$pkg")
+        else
+          root="."
+        fi
+        echo "PROJECT_ROOT=$root" >> $GITHUB_ENV
 
-      # ── 2) SET UP PYTHON ────────────────────────────────────────────────
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+        HAS_REACT=false
+        HAS_ANGULAR=false
+        HAS_PY=false
+        HAS_DOTNET=false
+        HAS_FLUTTER=false
 
-      # ── 3) INSTALL PYTHON DEPENDENCIES ─────────────────────────────────
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install openai PyGithub flake8 flake8-json
-        shell: bash
-      - name: Install Python dependencies
-        run: pip install pytz
-        shell: bash
-      # ── 4) SET UP NODE & ESLINT ────────────────────────────────────────
-      - name: Set up Node 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-      - name: Install ESLint
-        run: npm install -g eslint
-        shell: bash
-      # ── 5) INSTALL SHELLCHECK ──────────────────────────────────────────
-      - name: Install ShellCheck
-        run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
-        shell: bash
-      # ── 6) INSTALL .NET SDK ────────────────────────────────────────────
-      - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "7.0.x"
-
-      # ── 7) INSTALL dotnet-format & PRODUCE JSON ────────────────────────
-      - name: Install dotnet-format
-        run: dotnet tool install -g dotnet-format
-        shell: bash
-      - name: Run dotnet-format
-        run: |
-          dotnet format --verify-no-changes --report .github/linter-reports/dotnet-format.json || true
-        shell: bash
-      # ── 8) INSTALL FLUTTER SDK ─────────────────────────────────────────
-      - name: Install Flutter SDK (stable channel)
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      # ── 9) PREPARE LINTER-REPORTS FOLDER ───────────────────────────────
-      - name: Create linter-reports directory
-        run: mkdir -p .github/linter-reports
-        shell: bash
-      # ── 10) RUN ESLINT (JS/TS/React/Angular) ───────────────────────────
-      - name: Run ESLint
-        run: |
-          FILES=$(find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \))
-          if [ -n "$FILES" ]; then
-            eslint '**/*.js' '**/*.jsx' '**/*.ts' '**/*.tsx' \
-              --format json \
-              --output-file .github/linter-reports/eslint.json || true
+        if [ -f "$root/package.json" ]; then
+          if grep -q '"react"[[:space:]]*:' "$root/package.json"; then
+            HAS_REACT=true
           fi
-        shell: bash
-      # ── 11) RUN FLAKE8 (Python) ────────────────────────────────────────
-      - name: Run Flake8
-        run: |
+          if grep -q '"@angular/core"' "$root/package.json"; then
+            HAS_ANGULAR=true
+          fi
+        fi
+
+        if find "$root" -type f -name '*.py' | grep -q .; then
+          HAS_PY=true
+        fi
+
+        if find "$root" -type f -name '*.sln' | grep -q .; then
+          HAS_DOTNET=true
+        fi
+
+        if find "$root" -type f -name 'pubspec.yaml' | grep -q .; then
+          HAS_FLUTTER=true
+        fi
+
+        echo "HAS_REACT=$HAS_REACT"       >> $GITHUB_ENV
+        echo "HAS_ANGULAR=$HAS_ANGULAR"   >> $GITHUB_ENV
+        echo "HAS_PY=$HAS_PY"             >> $GITHUB_ENV
+        echo "HAS_DOTNET=$HAS_DOTNET"     >> $GITHUB_ENV
+        echo "HAS_FLUTTER=$HAS_FLUTTER"   >> $GITHUB_ENV
+      shell: bash
+    - name: Prepare reports directory
+      run: mkdir -p .github/linter-reports
+      shell: bash
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+    - name: Lint React
+      shell: bash
+      run: |
+        if [ "$HAS_REACT" = "true" ]; then
+          echo "⚛️ Setting up Node for React"
+          # curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          # apt-get install -y nodejs
+          cd "$PROJECT_ROOT"
+          npm install --no-save \
+            eslint @eslint/js \
+            @babel/core @babel/eslint-parser @babel/preset-react \
+            eslint-plugin-react eslint-plugin-react-hooks \
+            eslint-plugin-react-refresh eslint-plugin-jsx-a11y \
+            eslint-plugin-import eslint-plugin-sonarjs
+          npx eslint . \
+            --config eslint.config.js \
+            --max-warnings=1000 \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
+            echo "⚛️ ESLint finished with warnings and continued"
+        else
+          echo "Skipping React linting."
+        fi
+
+    - name: Lint Angular
+      shell: bash
+      run: |
+        if [ "$HAS_ANGULAR" = "true" ]; then
+          echo "🛡️ Setting up Node for Angular"
+          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          apt-get install -y nodejs
+          cd "$PROJECT_ROOT"
+          npm install --no-save \
+            eslint @eslint/js \
+            @angular-eslint/eslint-plugin @angular-eslint/eslint-config \
+            eslint-plugin-import
+          npx eslint 'src/**/*.{ts,tsx}' \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+        else
+          echo "🛡️ Skipping Angular linting."
+        fi
+
+    - name: Lint Python
+      shell: bash
+      run: |
+        if [ "$HAS_PY" = "true" ]; then
+          echo "🐍 Setting up Python for linting"
+          python -m pip install --upgrade pip
+          pip install flake8 flake8-json
+          cd "$PROJECT_ROOT"
           FILES=$(find . -type f -name "*.py")
           if [ -n "$FILES" ]; then
-            flake8 . --format=json --output-file .github/linter-reports/flake8.json || true
+            flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
           fi
-        shell: bash
-      # ── 12) RUN STYLELINT (CSS/SCSS/LESS) ─────────────────────────────
-      - name: Install Stylelint
-        run: npm install -g stylelint stylelint-config-standard
-        shell: bash
-      - name: Run Stylelint
-        run: |
-          FILES=$(find . -type f \( -name "*.css" -o -name "*.scss" -o -name "*.less" \))
-          if [ -n "$FILES" ]; then
-            stylelint "**/*.{css,scss,less}" \
-              --formatter json \
-              --output-file .github/linter-reports/stylelint.json || true
-          fi
-        shell: bash
+        else
+          echo "🐍 Skipping Python linting."
+        fi
 
-      # ── 13) RUN HTMLHINT (HTML) ────────────────────────────────────────
-      - name: Install HTMLHint
-        run: npm install -g htmlhint
-        shell: bash
-      - name: Run HTMLHint
-        run: |
-          FILES=$(find . -type f -name "*.html")
-          if [ -n "$FILES" ]; then
-            htmlhint --format json **/*.html > .github/linter-reports/htmlhint.json || true
-          fi
-        shell: bash
+    - name: Lint .NET
+      shell: bash
+      run: |
+        if [ "$HAS_DOTNET" = "true" ]; then
+          echo "🧩 Setting up .NET for linting"
+          dotnet tool install -g dotnet-format
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          cd "$PROJECT_ROOT"
+          dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
+        else
+          echo "🧩 Skipping .NET formatting."
+      
+        
+        fi
 
-      # ── 14) RUN SHELLCHECK (Shell scripts) ─────────────────────────────
-      - name: Run ShellCheck
-        run: |
-          FILES=$(find . -type f -name "*.sh")
-          if [ -n "$FILES" ]; then
-            find . -type f -name "*.sh" \
-              | xargs -I {} sh -c "shellcheck -f json {} 2>/dev/null >> .github/linter-reports/shellcheck.json" || true
-          fi
-        shell: bash
+    - name: Analyze Flutter
+      shell: bash
+      run: |
+        if [ "$HAS_FLUTTER" = "true" ]; then
+          echo "🪶 Setting up Flutter for analysis"
+          git clone https://github.com/flutter/flutter.git -b stable --depth 1
+          export PATH="$PWD/flutter/bin:$PATH"
+          flutter doctor
+          cd "$PROJECT_ROOT"
+          flutter pub get
+          dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
+        else
+          echo "🪶 Skipping Flutter analysis."
+        
+        fi
 
-      # ── 15) FETCH DART/FLUTTER DEPENDENCIES ────────────────────────────
-      - name: Fetch dependencies for Flutter/Dart
-        run: |
-          if [ -f "pubspec.yaml" ]; then
-            flutter pub get
-          fi
-        shell: bash
-
-      # ── 16) RUN FLUTTER/DART ANALYZER ──────────────────────────────────
-      - name: Run Dart/Flutter Analyzer
-        run: |
-          if [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
-            dart analyze --format=json > .github/linter-reports/dartanalyzer.json || true
-          else
-            echo '{"issues":[]}' > .github/linter-reports/dartanalyzer.json
-          fi
-        shell: bash
-
-      # ── 17) DEBUG: SHOW FIRST LINES OF ANALYZER JSON ───────────────────
-      - name: Dump first lines of analyzer JSON
-        run: |
-          echo "=== begin dartanalyzer.json ==="
-          head -n 20 .github/linter-reports/dartanalyzer.json || echo "(file is empty)"
-          echo "=== end dartanalyzer.json ==="
-        shell: bash
-
-
-      - name: Run the AI review
-        run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
-        shell: bash
-        env:
-          OPENAI_API_KEY:   ${{ inputs.openai_key }}
-          GITHUB_TOKEN:     ${{ inputs.github_token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
-          TARGET_TIMEZONE: Asia/Kolkata
+    - name: Install Python deps for AI bot
+      run: |
+        python -m pip install --upgrade pip
+        pip install openai PyGithub pytz
+      shell: bash
+    - name: Run the AI review
+      shell: bash
+      run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
+      env:
+        OPENAI_API_KEY:   ${{ inputs.openai_key }}
+        GITHUB_TOKEN:     ${{ inputs.github_token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        TARGET_TIMEZONE: Asia/Kolkata
