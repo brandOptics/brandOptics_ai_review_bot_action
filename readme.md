@@ -24,7 +24,7 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 
 ---
 
-## 🚀 Usage in CI/CD
+## Usage in CI/CD
 
 Create `.github/workflows/ci.yml` in your project repository:
 
@@ -56,7 +56,7 @@ jobs:
 
 ---
 
-## 🧪 Flutter Setup
+## Flutter Setup
 
 Add the following `analysis_options.yaml` file to the root of your Flutter project (next to `pubspec.yaml`).
 
@@ -217,7 +217,7 @@ linter:
 
 ---
 
-## ⚛️ React Setup
+## React Setup
 
 Create `eslint.config.js` at your project root:
 
@@ -288,7 +288,7 @@ export default [
 
 ---
 
-## 🟩 Node Setup
+## Node Setup
 
 Create `eslint.config.js` at your project root:
 
@@ -380,9 +380,9 @@ module.exports = [
 
 ---
 
-## 🔐 Secrets Configuration
+## Secrets Configuration
 
-### ✅ Required: `OPENAI_API_KEY`
+### Required: `OPENAI_API_KEY`
 
 #### To set:
 
@@ -396,7 +396,7 @@ module.exports = [
 
 ---
 
-## 🧠 Supported Languages
+## Supported Languages
 
 | Language | Status           |
 | -------- | ---------------- |
@@ -409,7 +409,7 @@ module.exports = [
 
 ---
 
-## 🛣️ Roadmap
+## Roadmap
 
 * ✅ Improve feedback formatting
 * 🚧 Angular support (TypeScript / HTML)
