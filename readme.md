@@ -49,7 +49,7 @@ jobs:
       - name: Run brandOptics AI review
         uses: brandoptics/brandOptics_ai_review_bot_action@v3.1.3
         with:
-          openai_key:   ${{ secrets.OPENAI_API_KEY }}
+          openai_key:   ${{ secrets.OPENAI_API_KEY }} # Need to add this as a repository secrets with the name "OPENAI_API_KEY"
           github_token: ${{ secrets.GITHUB_TOKEN }}  # Automatically provided
 ```
 
