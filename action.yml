@@ -111,7 +111,7 @@ runs:
               --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
               echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
           else
-            tmpcfg="$RUNNER_TEMP/eslint.react.config.mjs"
+            tmpcfg="$PROJECT_ROOT/.tmp.eslint.react.config.mjs"
             cat > "$tmpcfg" <<'EOF'
         export default [
           { files: ["**/*.{js,jsx,ts,tsx}"] },
@@ -184,7 +184,7 @@ runs:
             npm install --no-save typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1
           fi
 
-          tmpcfg="$RUNNER_TEMP/eslint.node.config.mjs"
+          tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
           cat > "$tmpcfg" <<'EOF'
         import js from "@eslint/js";
         export default [
@@ -264,12 +264,6 @@ runs:
         fi
 
     - name: Install Python deps for AI bot
-      shell: bash
-      run: |
-        set -euo pipefail
-        python -m pip install --upgrade pip
-        pip install openai PyGithub pytz
-    - name: Pip install bot deps
       shell: bash
       run: |
         set -euo pipefail
