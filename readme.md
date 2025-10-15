@@ -8,7 +8,7 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 
 ## 🔖 Current Version
 
-**v3.0.7** – Full support for Flutter & React. Angular and .NET support is in progress.
+**v3.1.3** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
 
 ---
 
