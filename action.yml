@@ -196,7 +196,7 @@ runs:
             files: ["**/*.{js,jsx,ts,tsx}"],
             languageOptions: {
               ecmaVersion: "latest",
-              sourceType: "script",
+              sourceType: "module",
               ...(tsParser ? { parser: tsParser } : {})
             },
             plugins: {
