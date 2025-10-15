@@ -175,58 +175,84 @@ runs:
             HAS_TS=false
           fi
 
-          # ✅ install globals too
-          npm install --no-save eslint @eslint/js eslint-plugin-import globals >/dev/null 2>&1
+          npm install --no-save eslint @eslint/js eslint-plugin-import >/dev/null 2>&1
           if [ "$HAS_TS" = "true" ]; then
             npm install --no-save typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1
           fi
 
           tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
           cat > "$tmpcfg" <<'EOF'
-          import js from "@eslint/js";
-          import globals from "globals";
+        const js = (await import("@eslint/js")).default;
+        // Inline Node globals (readonly)
+        const NODE_GLOBALS = {
+          // Common
+          console: "readonly",
+          process: "readonly",
+          module: "readonly",
+          require: "readonly",
+          __dirname: "readonly",
+          __filename: "readonly",
+          exports: "readonly",
+          global: "readonly",
 
-          let tsParser;
-          try {
-            tsParser = (await import("@typescript-eslint/parser")).default;
-          } catch (_) {
-            tsParser = undefined;
-          }
+          // Timers
+          setTimeout: "readonly",
+          clearTimeout: "readonly",
+          setInterval: "readonly",
+          clearInterval: "readonly",
+          setImmediate: "readonly",
+          clearImmediate: "readonly",
 
-          const importPlugin = (await import("eslint-plugin-import")).default;
+          // Buffers / URL
+          Buffer: "readonly",
+          URL: "readonly",
+          URLSearchParams: "readonly",
 
-          export default [
-            js.configs.recommended,
-            {
-              files: ["**/*.{js,jsx,ts,tsx}"],
-              languageOptions: {
-                ecmaVersion: "latest",
-                sourceType: "module",
-                ...(tsParser ? { parser: tsParser } : {}),
+          // Misc
+          queueMicrotask: "readonly",
+          performance: "readonly",
+          AbortController: "readonly",
+          TextEncoder: "readonly",
+          TextDecoder: "readonly",
+        };
+        let tsParser;
+        try {
+          tsParser = (await import("@typescript-eslint/parser")).default;
+        } catch (_) {
+          tsParser = undefined;
+        }
+        
+        export default [
+          js.configs.recommended,
+          {
+            files: ["**/*.{js,jsx,ts,tsx}"],
+            languageOptions: {
+              ecmaVersion: "latest",
+              sourceType: "module",
+              ...(tsParser ? { parser: tsParser } : {}),
                 globals: {
-                  ...globals.node,  // ✅ works now
-                  console: "readonly",
-                  process: "readonly",
-                },
-              },
-              plugins: {
-                import: importPlugin,
-              },
-              rules: {
-                "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-                "no-undef": "error",
-              },
+                ...NODE_GLOBALS,
             },
-          ];
-          EOF
+            },
+            plugins: {
+              import: (await import("eslint-plugin-import")).default
+            },
+            rules: {
+              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+              "no-undef": "error"
+            }
+          }
+        ];
+        EOF
 
-              npx eslint . \
+          npx eslint . \
             --config "$tmpcfg" \
             --format json \
             --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
         else
           echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
         fi
+
 
     - name: Lint Python
       shell: bash
