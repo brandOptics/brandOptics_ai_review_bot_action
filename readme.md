@@ -305,6 +305,7 @@ export default [
 | Angular  | 🚧 In Progress   |
 | .NET     | 🚧 In Progress   |
 | Python   | ✅ Basic (Flake8) |
+| Node   | ✅ Stable|
 
 ---
 
