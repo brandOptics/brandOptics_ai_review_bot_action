@@ -130,15 +130,15 @@ runs:
               }
             }
           ];
-          EOF
-                      npx eslint . \
-                        --config "$tmpcfg" \
-                        --format json \
-                        --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-                    fi
-                  else
-                    echo "Skipping React linting."
-                  fi
+EOF # <--- CORRECTED: 'EOF' is on its own line and not indented
+            npx eslint . \
+              --config "$tmpcfg" \
+              --format json \
+              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+          fi
+        else
+          echo "Skipping React linting."
+        fi
 
     - name: Lint Angular
       shell: bash
@@ -195,8 +195,7 @@ runs:
               }
             }
           ];
-          EOF
-
+EOF # <-- Ensuring this is also correctly formatted
                     if [ "$HAS_TS" = "true" ]; then
                       sed -i 's/languageOptions: {/languageOptions: { parser: require("@typescript-eslint\/parser"), /' "$tmpcfg"
                     fi
