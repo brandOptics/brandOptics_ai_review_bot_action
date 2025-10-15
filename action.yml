@@ -220,7 +220,7 @@ runs:
           ];
           EOF
 
-          npx eslint . \
+              npx eslint . \
             --config "$tmpcfg" \
             --format json \
             --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
