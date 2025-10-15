@@ -17,7 +17,7 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 1. [Usage in CI/CD](#usage-in-cicd)
 2. [Flutter Setup](#flutter-setup)
 3. [React Setup](#react-setup)
-4. [React Setup](#react-setup)
+4. [Node Setup](#node-setup)
 5. [Secrets Configuration](#secrets-configuration)
 6. [Supported Languages](#supported-languages)
 7. [Roadmap](#roadmap)
