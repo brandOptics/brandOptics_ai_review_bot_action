@@ -17,65 +17,85 @@ runs:
   steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - id: detect
       name: Find project root and detect languages
+      shell: bash
       run: |
-        pkg=$(find . -type f -name package.json | head -n1)
-        if [ -n "$pkg" ]; then
+        set -euo pipefail
+
+        # Find first package.json outside node_modules for PROJECT_ROOT
+        pkg=$(find . -type f -name package.json -not -path "*/node_modules/*" | head -n1 || true)
+        if [ -n "${pkg:-}" ]; then
           root=$(dirname "$pkg")
         else
           root="."
         fi
-        echo "PROJECT_ROOT=$root" >> $GITHUB_ENV
+        echo "PROJECT_ROOT=$root" >> "$GITHUB_ENV"
 
+        # Initialize flags
+        HAS_NODE=false
         HAS_REACT=false
         HAS_ANGULAR=false
         HAS_PY=false
         HAS_DOTNET=false
         HAS_FLUTTER=false
 
+        # Node detection: any package.json/lockfile anywhere (excluding node_modules)
+        if find . -type f \( -name "package.json" -o -name "package-lock.json" -o -name "yarn.lock" -o -name "pnpm-lock.yaml" \) \
+             -not -path "*/node_modules/*" | grep -q .; then
+          HAS_NODE=true
+        fi
+
+        # React/Angular detection in PROJECT_ROOT package.json (avoid false positives in examples)
         if [ -f "$root/package.json" ]; then
           if grep -q '"react"[[:space:]]*:' "$root/package.json"; then
             HAS_REACT=true
           fi
-          if grep -q '"@angular/core"' "$root/package.json"; then
+          if grep -q '"@angular/core"[[:space:]]*:' "$root/package.json"; then
             HAS_ANGULAR=true
           fi
         fi
 
+        # Python
         if find "$root" -type f -name '*.py' | grep -q .; then
           HAS_PY=true
         fi
 
+        # .NET
         if find "$root" -type f -name '*.sln' | grep -q .; then
           HAS_DOTNET=true
         fi
 
+        # Flutter
         if find "$root" -type f -name 'pubspec.yaml' | grep -q .; then
           HAS_FLUTTER=true
         fi
 
-        echo "HAS_REACT=$HAS_REACT"       >> $GITHUB_ENV
-        echo "HAS_ANGULAR=$HAS_ANGULAR"   >> $GITHUB_ENV
-        echo "HAS_PY=$HAS_PY"             >> $GITHUB_ENV
-        echo "HAS_DOTNET=$HAS_DOTNET"     >> $GITHUB_ENV
-        echo "HAS_FLUTTER=$HAS_FLUTTER"   >> $GITHUB_ENV
-      shell: bash
+        # Export flags
+        {
+          echo "HAS_NODE=$HAS_NODE"
+          echo "HAS_REACT=$HAS_REACT"
+          echo "HAS_ANGULAR=$HAS_ANGULAR"
+          echo "HAS_PY=$HAS_PY"
+          echo "HAS_DOTNET=$HAS_DOTNET"
+          echo "HAS_FLUTTER=$HAS_FLUTTER"
+        } >> "$GITHUB_ENV"
+
     - name: Prepare reports directory
-      run: mkdir -p .github/linter-reports
       shell: bash
+      run: mkdir -p .github/linter-reports
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: 18
+
     - name: Lint React
       shell: bash
       run: |
-        if [ "$HAS_REACT" = "true" ]; then
-          echo "⚛️ Setting up Node for React"
-          # curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-          # apt-get install -y nodejs
+        if [ "${HAS_REACT}" = "true" ]; then
+          echo "⚛️ Linting React app in $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           npm install --no-save \
             eslint @eslint/js \
@@ -83,12 +103,29 @@ runs:
             eslint-plugin-react eslint-plugin-react-hooks \
             eslint-plugin-react-refresh eslint-plugin-jsx-a11y \
             eslint-plugin-import eslint-plugin-sonarjs
-          npx eslint . \
-            --config eslint.config.js \
-            --max-warnings=1000 \
-            --format json \
-            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
-            echo "⚛️ ESLint finished with warnings and continued"
+          # Uses your repo's eslint.config.js if present
+          if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
+            npx eslint . \
+              --max-warnings=1000 \
+              --format json \
+              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
+              echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
+          else
+            # Minimal flat config fallback for React projects
+            tmpcfg="$RUNNER_TEMP/eslint.react.config.mjs"
+            cat > "$tmpcfg" <<'EOF'
+            export default [
+              { files: ["**/*.{js,jsx,ts,tsx}"] },
+              { languageOptions: { parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } } } },
+              { plugins: { import: require("eslint-plugin-import"), react: require("eslint-plugin-react") } },
+              { rules: { "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }], "react/jsx-no-undef": "error" } }
+            ];
+            EOF
+            npx eslint . \
+              --config "$tmpcfg" \
+              --format json \
+              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+          fi
         else
           echo "Skipping React linting."
         fi
@@ -96,10 +133,8 @@ runs:
     - name: Lint Angular
       shell: bash
       run: |
-        if [ "$HAS_ANGULAR" = "true" ]; then
-          echo "🛡️ Setting up Node for Angular"
-          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-          apt-get install -y nodejs
+        if [ "${HAS_ANGULAR}" = "true" ]; then
+          echo "🛡️ Linting Angular app in $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
           npm install --no-save \
             eslint @eslint/js \
@@ -112,16 +147,70 @@ runs:
           echo "🛡️ Skipping Angular linting."
         fi
 
+    - name: Lint Node/JS/TS (generic)
+      shell: bash
+      run: |
+        # Run generic Node lint if a Node project exists but it's not React/Angular
+        if [ "${HAS_NODE}" = "true" ] && [ "${HAS_REACT}" = "false" ] && [ "${HAS_ANGULAR}" = "false" ]; then
+          echo "🟩 Generic Node/JS/TS lint in $PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+
+          # Determine if TS exists
+          if find . -type f -name "*.ts" -o -name "*.tsx" | grep -q .; then
+            HAS_TS=true
+          else
+            HAS_TS=false
+          fi
+
+          # Install minimal ESLint toolchain
+          npm install --no-save eslint @eslint/js eslint-plugin-import >/dev/null 2>&1
+          if [ "$HAS_TS" = "true" ]; then
+            npm install --no-save typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1
+          fi
+
+          # Create a temp config
+          tmpcfg="$RUNNER_TEMP/eslint.node.config.mjs"
+          cat > "$tmpcfg" <<'EOF'
+          import js from "@eslint/js";
+          export default [
+            js.configs.recommended,
+            {
+              files: ["**/*.{js,jsx,ts,tsx}"],
+              languageOptions: {
+                ecmaVersion: "latest",
+                sourceType: "module"
+              },
+              plugins: { import: require("eslint-plugin-import") },
+              rules: {
+                "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+                "no-undef": "error"
+              }
+            }
+          ];
+          EOF
+
+          # If TS present, augment config to use TS parser
+          if [ "$HAS_TS" = "true" ]; then
+            sed -i 's/languageOptions: {/languageOptions: { parser: require("@typescript-eslint\/parser"), /' "$tmpcfg"
+          fi
+
+          npx eslint . \
+            --config "$tmpcfg" \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+        else
+          echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
+        fi
+
     - name: Lint Python
       shell: bash
       run: |
-        if [ "$HAS_PY" = "true" ]; then
-          echo "🐍 Setting up Python for linting"
+        if [ "${HAS_PY}" = "true" ]; then
+          echo "🐍 Linting Python in $PROJECT_ROOT"
           python -m pip install --upgrade pip
           pip install flake8 flake8-json
           cd "$PROJECT_ROOT"
-          FILES=$(find . -type f -name "*.py")
-          if [ -n "$FILES" ]; then
+          if find . -type f -name "*.py" | grep -q .; then
             flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
           fi
         else
@@ -131,23 +220,21 @@ runs:
     - name: Lint .NET
       shell: bash
       run: |
-        if [ "$HAS_DOTNET" = "true" ]; then
-          echo "🧩 Setting up .NET for linting"
+        if [ "${HAS_DOTNET}" = "true" ]; then
+          echo "🧩 Formatting .NET in $PROJECT_ROOT"
           dotnet tool install -g dotnet-format
           export PATH="$PATH:$HOME/.dotnet/tools"
           cd "$PROJECT_ROOT"
           dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
         else
           echo "🧩 Skipping .NET formatting."
-      
-        
         fi
 
     - name: Analyze Flutter
       shell: bash
       run: |
-        if [ "$HAS_FLUTTER" = "true" ]; then
-          echo "🪶 Setting up Flutter for analysis"
+        if [ "${HAS_FLUTTER}" = "true" ]; then
+          echo "🪶 Analyzing Flutter in $PROJECT_ROOT"
           git clone https://github.com/flutter/flutter.git -b stable --depth 1
           export PATH="$PWD/flutter/bin:$PATH"
           flutter doctor
@@ -156,20 +243,20 @@ runs:
           dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
         else
           echo "🪶 Skipping Flutter analysis."
-        
         fi
 
     - name: Install Python deps for AI bot
+      shell: bash
       run: |
         python -m pip install --upgrade pip
         pip install openai PyGithub pytz
-      shell: bash
+
     - name: Run the AI review
       shell: bash
       run: python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
       env:
-        OPENAI_API_KEY:   ${{ inputs.openai_key }}
-        GITHUB_TOKEN:     ${{ inputs.github_token }}
+        OPENAI_API_KEY:    ${{ inputs.openai_key }}
+        GITHUB_TOKEN:      ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
-        TARGET_TIMEZONE: Asia/Kolkata
+        TARGET_TIMEZONE:   Asia/Kolkata
