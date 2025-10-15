@@ -175,44 +175,50 @@ runs:
             HAS_TS=false
           fi
 
-          npm install --no-save eslint @eslint/js eslint-plugin-import >/dev/null 2>&1
+          # ✅ install globals too
+          npm install --no-save eslint @eslint/js eslint-plugin-import globals >/dev/null 2>&1
           if [ "$HAS_TS" = "true" ]; then
             npm install --no-save typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1
           fi
 
           tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
           cat > "$tmpcfg" <<'EOF'
-        const js = (await import("@eslint/js")).default;
-        let tsParser;
-        try {
-          tsParser = (await import("@typescript-eslint/parser")).default;
-        } catch (_) {
-          tsParser = undefined;
-        }
+          import js from "@eslint/js";
+          import globals from "globals";
 
-        export default [
-          js.configs.recommended,
-          {
-            files: ["**/*.{js,jsx,ts,tsx}"],
-            languageOptions: {
-              ecmaVersion: "latest",
-              sourceType: "module",
-              ...(tsParser ? { parser: tsParser } : {}),
-                globals: { 
-                  console: "readonly",
-                  process: "readonly", 
-            },
-            },
-            plugins: {
-              import: (await import("eslint-plugin-import")).default
-            },
-            rules: {
-              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-              "no-undef": "error"
-            }
+          let tsParser;
+          try {
+            tsParser = (await import("@typescript-eslint/parser")).default;
+          } catch (_) {
+            tsParser = undefined;
           }
-        ];
-        EOF
+
+          const importPlugin = (await import("eslint-plugin-import")).default;
+
+          export default [
+            js.configs.recommended,
+            {
+              files: ["**/*.{js,jsx,ts,tsx}"],
+              languageOptions: {
+                ecmaVersion: "latest",
+                sourceType: "module",
+                ...(tsParser ? { parser: tsParser } : {}),
+                globals: {
+                  ...globals.node,  // ✅ works now
+                  console: "readonly",
+                  process: "readonly",
+                },
+              },
+              plugins: {
+                import: importPlugin,
+              },
+              rules: {
+                "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+                "no-undef": "error",
+              },
+            },
+          ];
+          EOF
 
           npx eslint . \
             --config "$tmpcfg" \
@@ -221,7 +227,6 @@ runs:
         else
           echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
         fi
-
 
     - name: Lint Python
       shell: bash
