@@ -24,6 +24,7 @@ runs:
       run: |
         set -euo pipefail
 
+        # Find first package.json outside node_modules for PROJECT_ROOT
         pkg=$(find . -type f -name package.json -not -path "*/node_modules/*" | head -n1 || true)
         if [ -n "${pkg:-}" ]; then
           root=$(dirname "$pkg")
@@ -32,6 +33,7 @@ runs:
         fi
         echo "PROJECT_ROOT=$root" >> "$GITHUB_ENV"
 
+        # Initialize flags
         HAS_NODE=false
         HAS_REACT=false
         HAS_ANGULAR=false
@@ -77,11 +79,16 @@ runs:
     - name: Prepare reports directory
       shell: bash
       run: mkdir -p .github/linter-reports
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
 
     - name: Setup Node.js
+      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
       uses: actions/setup-node@v4
       with:
-        node-version: 18
+        node-version: "18"
 
     - name: Lint React
       shell: bash
@@ -106,31 +113,31 @@ runs:
           else
             tmpcfg="$RUNNER_TEMP/eslint.react.config.mjs"
             cat > "$tmpcfg" <<'EOF'
-          export default [
-            { files: ["**/*.{js,jsx,ts,tsx}"] },
-            {
-              languageOptions: {
-                parserOptions: {
-                  ecmaVersion: "latest",
-                  sourceType: "module",
-                  ecmaFeatures: { jsx: true }
-                }
-              }
-            },
-            {
-              plugins: {
-                import: require("eslint-plugin-import"),
-                react: require("eslint-plugin-react")
-              }
-            },
-            {
-              rules: {
-                "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-                "react/jsx-no-undef": "error"
+        export default [
+          { files: ["**/*.{js,jsx,ts,tsx}"] },
+          {
+            languageOptions: {
+              parserOptions: {
+                ecmaVersion: "latest",
+                sourceType: "module",
+                ecmaFeatures: { jsx: true }
               }
             }
-          ];
-EOF # <--- CORRECTED: 'EOF' is on its own line and not indented
+          },
+          {
+            plugins: {
+              import: require("eslint-plugin-import"),
+              react: require("eslint-plugin-react")
+            }
+          },
+          {
+            rules: {
+              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+              "react/jsx-no-undef": "error"
+            }
+          }
+        ];
+        EOF
             npx eslint . \
               --config "$tmpcfg" \
               --format json \
@@ -179,34 +186,36 @@ EOF # <--- CORRECTED: 'EOF' is on its own line and not indented
 
           tmpcfg="$RUNNER_TEMP/eslint.node.config.mjs"
           cat > "$tmpcfg" <<'EOF'
-          import js from "@eslint/js";
-          export default [
-            js.configs.recommended,
-            {
-              files: ["**/*.{js,jsx,ts,tsx}"],
-              languageOptions: {
-                ecmaVersion: "latest",
-                sourceType: "module"
-              },
-              plugins: { import: require("eslint-plugin-import") },
-              rules: {
-                "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-                "no-undef": "error"
-              }
+        import js from "@eslint/js";
+        export default [
+          js.configs.recommended,
+          {
+            files: ["**/*.{js,jsx,ts,tsx}"],
+            languageOptions: {
+              ecmaVersion: "latest",
+              sourceType: "module"
+            },
+            plugins: { import: require("eslint-plugin-import") },
+            rules: {
+              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+              "no-undef": "error"
             }
-          ];
-EOF # <-- Ensuring this is also correctly formatted
-                    if [ "$HAS_TS" = "true" ]; then
-                      sed -i 's/languageOptions: {/languageOptions: { parser: require("@typescript-eslint\/parser"), /' "$tmpcfg"
-                    fi
+          }
+        ];
+        EOF
+          if [ "$HAS_TS" = "true" ]; then
+            # inject TS parser
+            sed -i 's/languageOptions: {$/languageOptions: { parser: require("@typescript-eslint\/parser"),/' "$tmpcfg"
+          fi
 
-                    npx eslint . \
-                      --config "$tmpcfg" \
-                      --format json \
-                      --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-                  else
-                    echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
-                  fi
+          npx eslint . \
+            --config "$tmpcfg" \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+        else
+          echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
+        fi
+
 
     - name: Lint Python
       shell: bash
@@ -260,15 +269,21 @@ EOF # <-- Ensuring this is also correctly formatted
         set -euo pipefail
         python -m pip install --upgrade pip
         pip install openai PyGithub pytz
+    - name: Pip install bot deps
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        pip install openai PyGithub pytz
 
     - name: Run the AI review
       shell: bash
       env:
-        OPENAI_API_KEY:    ${{ inputs.openai_key }}
-        GITHUB_TOKEN:      ${{ inputs.github_token }}
+        OPENAI_API_KEY: ${{ inputs.openai_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
-        TARGET_TIMEZONE:   Asia/Kolkata
+        TARGET_TIMEZONE: Asia/Kolkata
       run: |
         set -euo pipefail
         python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
