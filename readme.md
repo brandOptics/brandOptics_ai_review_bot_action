@@ -293,7 +293,10 @@ export default [
 Create `eslint.config.js` at your project root:
 
 ```js
-// eslint.config.cjs
+/* eslint-env node */
+/* global require, module */
+
+// eslint.config.js
 const js = require("@eslint/js");
 const globals = require("globals");
 const importPlugin = require("eslint-plugin-import");
@@ -303,7 +306,7 @@ const n = require("eslint-plugin-n");
 module.exports = [
   { ignores: ["dist", "build", "node_modules"] },
 
-  // avoid false positives for the config file itself
+  // Treat ESLint config files as CommonJS and don't flag require/module.
   {
     files: [
       "eslint.config.cjs",
@@ -311,48 +314,40 @@ module.exports = [
       ".eslintrc.cjs",
       ".eslintrc.js",
     ],
+    languageOptions: {
+      parserOptions: { sourceType: "script" }, // CommonJS
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+        require: "true",
+        module: "true",
+      },
+    },
     rules: {
+      "no-undef": "off",
       "n/no-unpublished-import": "off",
       "n/no-unpublished-require": "off",
     },
   },
 
   {
-    files: ["**/*.{js,cjs,mjs,ts}"],
+    files: ["**/*.{js,mjs,cjs,ts}"],
     languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
-      },
+      globals: { ...globals.node },
+      parserOptions: { ecmaVersion: "latest", sourceType: "module" },
     },
-    plugins: {
-      import: importPlugin,
-      sonarjs,
-      n,
-    },
+    plugins: { import: importPlugin, sonarjs, n },
     settings: {
-      // Make import plugin resolve Node modules cleanly
       "import/resolver": {
         node: { extensions: [".js", ".cjs", ".mjs", ".ts", ".json"] },
       },
     },
     rules: {
-      // Core ESLint
       ...js.configs.recommended.rules,
-
-      // Node plugin (flat config)
       ...n.configs["flat/recommended"].rules,
-
-      // Import
       ...importPlugin.configs.recommended.rules,
-
-      // SonarJS
       ...sonarjs.configs.recommended.rules,
 
-      // Your custom overrides
       "no-undef": "error",
       "no-unused-vars": [
         "error",
@@ -367,14 +362,14 @@ module.exports = [
       "no-debugger": "error",
       "no-var": "error",
       "prefer-const": "error",
-
-      // A few handy Node-centric tweaks (optional)
       "n/no-missing-import": "error",
-      "n/no-unsupported-features/es-builtins": "off", // if you target modern Node
+      "n/no-unsupported-features/es-builtins": "off",
       "n/no-unsupported-features/node-builtins": "off",
     },
   },
 ];
+
+ 
 
 ```
 
