@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v3.0.7
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3.1.3
         with:
           openai_key:   ${{ secrets.OPENAI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}  # Automatically provided
