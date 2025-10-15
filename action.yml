@@ -114,23 +114,19 @@ runs:
             tmpcfg="$PROJECT_ROOT/.tmp.eslint.react.config.mjs"
             cat > "$tmpcfg" <<'EOF'
         export default [
-          { files: ["**/*.{js,jsx,ts,tsx}"] },
           {
+            files: ["**/*.{js,jsx,ts,tsx}"],
             languageOptions: {
               parserOptions: {
                 ecmaVersion: "latest",
                 sourceType: "module",
                 ecmaFeatures: { jsx: true }
               }
-            }
-          },
-          {
+            },
             plugins: {
-              import: require("eslint-plugin-import"),
-              react: require("eslint-plugin-react")
-            }
-          },
-          {
+              import: (await import("eslint-plugin-import")).default,
+              react: (await import("eslint-plugin-react")).default
+            },
             rules: {
               "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
               "react/jsx-no-undef": "error"
@@ -186,16 +182,26 @@ runs:
 
           tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
           cat > "$tmpcfg" <<'EOF'
-        import js from "@eslint/js";
+        const js = (await import("@eslint/js")).default;
+        let tsParser;
+        try {
+          tsParser = (await import("@typescript-eslint/parser")).default;
+        } catch (_) {
+          tsParser = undefined;
+        }
+
         export default [
           js.configs.recommended,
           {
             files: ["**/*.{js,jsx,ts,tsx}"],
             languageOptions: {
               ecmaVersion: "latest",
-              sourceType: "module"
+              sourceType: "module",
+              ...(tsParser ? { parser: tsParser } : {})
             },
-            plugins: { import: require("eslint-plugin-import") },
+            plugins: {
+              import: (await import("eslint-plugin-import")).default
+            },
             rules: {
               "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
               "no-undef": "error"
@@ -203,10 +209,6 @@ runs:
           }
         ];
         EOF
-          if [ "$HAS_TS" = "true" ]; then
-            # inject TS parser
-            sed -i 's/languageOptions: {$/languageOptions: { parser: require("@typescript-eslint\/parser"),/' "$tmpcfg"
-          fi
 
           npx eslint . \
             --config "$tmpcfg" \
