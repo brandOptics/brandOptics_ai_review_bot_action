@@ -17,9 +17,10 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 1. [Usage in CI/CD](#usage-in-cicd)
 2. [Flutter Setup](#flutter-setup)
 3. [React Setup](#react-setup)
-4. [Secrets Configuration](#secrets-configuration)
-5. [Supported Languages](#supported-languages)
-6. [Roadmap](#roadmap)
+4. [React Setup](#react-setup)
+5. [Secrets Configuration](#secrets-configuration)
+6. [Supported Languages](#supported-languages)
+7. [Roadmap](#roadmap)
 
 ---
 
@@ -276,6 +277,105 @@ export default [
     },
   },
 ];
+```
+
+---
+
+
+
+
+> 💡 **Note:** You may comment out rules that aren't applicable to your project.
+
+---
+
+## 🟩 Node Setup
+
+Create `eslint.config.js` at your project root:
+
+```js
+// eslint.config.cjs
+const js = require("@eslint/js");
+const globals = require("globals");
+const importPlugin = require("eslint-plugin-import");
+const sonarjs = require("eslint-plugin-sonarjs");
+const n = require("eslint-plugin-n");
+
+module.exports = [
+  { ignores: ["dist", "build", "node_modules"] },
+
+  // avoid false positives for the config file itself
+  {
+    files: [
+      "eslint.config.cjs",
+      "eslint.config.js",
+      ".eslintrc.cjs",
+      ".eslintrc.js",
+    ],
+    rules: {
+      "n/no-unpublished-import": "off",
+      "n/no-unpublished-require": "off",
+    },
+  },
+
+  {
+    files: ["**/*.{js,cjs,mjs,ts}"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
+    },
+    plugins: {
+      import: importPlugin,
+      sonarjs,
+      n,
+    },
+    settings: {
+      // Make import plugin resolve Node modules cleanly
+      "import/resolver": {
+        node: { extensions: [".js", ".cjs", ".mjs", ".ts", ".json"] },
+      },
+    },
+    rules: {
+      // Core ESLint
+      ...js.configs.recommended.rules,
+
+      // Node plugin (flat config)
+      ...n.configs["flat/recommended"].rules,
+
+      // Import
+      ...importPlugin.configs.recommended.rules,
+
+      // SonarJS
+      ...sonarjs.configs.recommended.rules,
+
+      // Your custom overrides
+      "no-undef": "error",
+      "no-unused-vars": [
+        "error",
+        {
+          args: "after-used",
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^[A-Z_]",
+        },
+      ],
+      eqeqeq: ["error", "always"],
+      "no-console": "warn",
+      "no-debugger": "error",
+      "no-var": "error",
+      "prefer-const": "error",
+
+      // A few handy Node-centric tweaks (optional)
+      "n/no-missing-import": "error",
+      "n/no-unsupported-features/es-builtins": "off", // if you target modern Node
+      "n/no-unsupported-features/node-builtins": "off",
+    },
+  },
+];
+
 ```
 
 ---
