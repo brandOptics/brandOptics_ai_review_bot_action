@@ -29,29 +29,31 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 Create `.github/workflows/ci.yml` in your project repository:
 
 ```yaml
-title: brandOptics AI Neural Nexus Code Review
-
+name: "brandOptics AI Neural Nexus Code Review"
+ 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-
+ 
 permissions:
   contents: read
   pull-requests: write
   statuses: write
-
+ 
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
+      # 1) Always checkout first
       - name: Checkout code
         uses: actions/checkout@v4
-
+ 
+      # 2) Invoke your composite Action
       - name: Run brandOptics AI review
         uses: brandoptics/brandOptics_ai_review_bot_action@v3.2.0
         with:
-          openai_key:   ${{ secrets.OPENAI_API_KEY }} # Need to add this as a repository secrets with the name "OPENAI_API_KEY"
-          github_token: ${{ secrets.GITHUB_TOKEN }}  # Automatically provided
+          openai_key: ${{ secrets.OPENAI_API_KEY}}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ---
