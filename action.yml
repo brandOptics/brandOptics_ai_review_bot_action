@@ -76,231 +76,185 @@ runs:
           echo "HAS_FLUTTER=$HAS_FLUTTER"
         } >> "$GITHUB_ENV"
 
-    - name: Prepare reports directory
+    - name: Prepare reports & caches dir
       shell: bash
-      run: mkdir -p .github/linter-reports
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.x"
+      run: |
+        mkdir -p .github/linter-reports
+        mkdir -p .cache/eslint
 
-    - name: Setup Node.js
+    # ---------- Node / React / Angular caching ----------
+    - name: Setup Node.js (with npm cache)
       if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
       uses: actions/setup-node@v4
       with:
-        node-version: "18"
+        node-version: "20"
+        cache: "npm"
+        cache-dependency-path: ${{ env.PROJECT_ROOT }}/package-lock.json
 
-    - name: Lint React
+    - name: Cache ESLint cache file
+      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: .cache/eslint
+        key: eslint-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', env.PROJECT_ROOT)) }}-${{ hashFiles('**/.eslintrc.*', '**/eslint.config.*') }}
+        restore-keys: |
+          eslint-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', env.PROJECT_ROOT)) }}-
+          eslint-${{ runner.os }}-
+
+    - name: Lint React / Next.js (uses project deps, cached)
+      if: ${{ env.HAS_REACT == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${HAS_REACT}" = "true" ]; then
-          echo "⚛️ Linting React app in $PROJECT_ROOT"
-          cd "$PROJECT_ROOT"
-          npm install --no-save \
-            eslint @eslint/js \
-            @babel/core @babel/eslint-parser @babel/preset-react \
-            eslint-plugin-react eslint-plugin-react-hooks \
-            eslint-plugin-react-refresh eslint-plugin-jsx-a11y \
-            eslint-plugin-import eslint-plugin-sonarjs
+        echo "⚛️ Linting React/Next in $PROJECT_ROOT"
+        cd "$PROJECT_ROOT"
 
-          if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
-            npx eslint . \
-              --max-warnings=1000 \
-              --format json \
-              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
-              echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
-          else
-            tmpcfg="$PROJECT_ROOT/.tmp.eslint.react.config.mjs"
-            cat > "$tmpcfg" <<'EOF'
-        export default [
-          {
-            files: ["**/*.{js,jsx,ts,tsx}"],
-            languageOptions: {
-              parserOptions: {
-                ecmaVersion: "latest",
-                sourceType: "module",
-                ecmaFeatures: { jsx: true }
-              }
-            },
-            plugins: {
-              import: (await import("eslint-plugin-import")).default,
-              react: (await import("eslint-plugin-react")).default
-            },
-            rules: {
-              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-              "react/jsx-no-undef": "error"
-            }
-          }
-        ];
-        EOF
-            npx eslint . \
-              --config "$tmpcfg" \
-              --format json \
-              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-          fi
+        # Use project deps (fast w/ npm cache). If lockfile exists, CI install.
+        if [ -f package-lock.json ]; then
+          npm ci --no-audit --no-fund
         else
-          echo "Skipping React linting."
+          npm install --no-audit --no-fund
         fi
 
-    - name: Lint Angular
+        # Respect repo config; fall back to safe defaults
+        TARGETS=(
+          "app/**/*.{js,jsx,ts,tsx}"
+          "pages/**/*.{js,jsx,ts,tsx}"
+          "components/**/*.{js,jsx,ts,tsx}"
+          "src/**/*.{js,jsx,ts,tsx}"
+        )
+        mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
+
+        # Use ESLint cache for speed
+        npx eslint "${TARGETS[@]}" \
+          --cache \
+          --cache-location "$GITHUB_WORKSPACE/.cache/eslint/.eslintcache" \
+          --format json \
+          --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" \
+          || true
+        echo "✅ ESLint finished."
+
+    - name: Lint Angular (uses project deps, cached)
+      if: ${{ env.HAS_ANGULAR == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${HAS_ANGULAR}" = "true" ]; then
-          echo "🛡️ Linting Angular app in $PROJECT_ROOT"
-          cd "$PROJECT_ROOT"
-          npm install --no-save \
-            eslint @eslint/js \
-            @angular-eslint/eslint-plugin @angular-eslint/eslint-config \
-            eslint-plugin-import
-          npx eslint 'src/**/*.{ts,tsx}' \
-            --format json \
-            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+        echo "🛡️ Linting Angular in $PROJECT_ROOT"
+        cd "$PROJECT_ROOT"
+
+        if [ -f package-lock.json ]; then
+          npm ci --no-audit --no-fund
         else
-          echo "🛡️ Skipping Angular linting."
+          npm install --no-audit --no-fund
         fi
 
-    - name: Lint Node/JS/TS (generic)
+        mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
+        npx eslint 'src/**/*.{ts,tsx}' \
+          --cache \
+          --cache-location "$GITHUB_WORKSPACE/.cache/eslint/.eslintcache" \
+          --format json \
+          --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+
+    - name: Lint Node/JS/TS (generic; uses project deps, cached)
+      if: ${{ env.HAS_NODE == 'true' && env.HAS_REACT != 'true' && env.HAS_ANGULAR != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${HAS_NODE}" = "true" ] && [ "${HAS_REACT}" = "false" ] && [ "${HAS_ANGULAR}" = "false" ]; then
-          echo "🟩 Generic Node/JS/TS lint in $PROJECT_ROOT"
-          cd "$PROJECT_ROOT"
+        echo "🟩 Generic Node/JS/TS lint in $PROJECT_ROOT"
+        cd "$PROJECT_ROOT"
 
-          if find . \( -name "*.ts" -o -name "*.tsx" \) -type f | grep -q .; then
-            HAS_TS=true
-          else
-            HAS_TS=false
-          fi
-
-          npm install --no-save eslint @eslint/js eslint-plugin-import >/dev/null 2>&1
-          if [ "$HAS_TS" = "true" ]; then
-            npm install --no-save typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1
-          fi
-
-          tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
-          cat > "$tmpcfg" <<'EOF'
-        const js = (await import("@eslint/js")).default;
-        // Inline Node globals (readonly)
-        const NODE_GLOBALS = {
-          // Common
-          console: "readonly",
-          process: "readonly",
-          module: "readonly",
-          require: "readonly",
-          __dirname: "readonly",
-          __filename: "readonly",
-          exports: "readonly",
-          global: "readonly",
-
-          // Timers
-          setTimeout: "readonly",
-          clearTimeout: "readonly",
-          setInterval: "readonly",
-          clearInterval: "readonly",
-          setImmediate: "readonly",
-          clearImmediate: "readonly",
-
-          // Buffers / URL
-          Buffer: "readonly",
-          URL: "readonly",
-          URLSearchParams: "readonly",
-
-          // Misc
-          queueMicrotask: "readonly",
-          performance: "readonly",
-          AbortController: "readonly",
-          TextEncoder: "readonly",
-          TextDecoder: "readonly",
-        };
-        let tsParser;
-        try {
-          tsParser = (await import("@typescript-eslint/parser")).default;
-        } catch (_) {
-          tsParser = undefined;
-        }
-        
-        export default [
-          js.configs.recommended,
-          {
-            files: ["**/*.{js,jsx,ts,tsx}"],
-            languageOptions: {
-              ecmaVersion: "latest",
-              sourceType: "module",
-              ...(tsParser ? { parser: tsParser } : {}),
-                globals: {
-                ...NODE_GLOBALS,
-            },
-            },
-            plugins: {
-              import: (await import("eslint-plugin-import")).default
-            },
-            rules: {
-              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-              "no-undef": "error"
-            }
-          }
-        ];
-        EOF
-
-          npx eslint . \
-            --config "$tmpcfg" \
-            --format json \
-            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+        if [ -f package-lock.json ]; then
+          npm ci --no-audit --no-fund
         else
-          echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
+          npm install --no-audit --no-fund
         fi
 
+        mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
+        npx eslint . \
+          --cache \
+          --cache-location "$GITHUB_WORKSPACE/.cache/eslint/.eslintcache" \
+          --format json \
+          --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
 
-    - name: Lint Python
+    # ---------- Python caching ----------
+    - name: Setup Python (with pip cache)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+        cache: "pip"
+        cache-dependency-path: |
+          ${{ env.PROJECT_ROOT }}/requirements.txt
+          ${{ env.PROJECT_ROOT }}/requirements-dev.txt
+
+    - name: Lint Python (flake8)
+      if: ${{ env.HAS_PY == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${HAS_PY}" = "true" ]; then
-          echo "🐍 Linting Python in $PROJECT_ROOT"
-          python -m pip install --upgrade pip
-          pip install flake8 flake8-json
-          cd "$PROJECT_ROOT"
-          if find . -type f -name "*.py" | grep -q .; then
-            flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
-          fi
-        else
-          echo "🐍 Skipping Python linting."
+        echo "🐍 Linting Python in $PROJECT_ROOT"
+        python -m pip install --upgrade pip
+        pip install flake8 flake8-json
+        cd "$PROJECT_ROOT"
+        if find . -type f -name "*.py" | grep -q .; then
+          flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
         fi
 
-    - name: Lint .NET
+    # ---------- .NET caching ----------
+    - name: Setup .NET (with NuGet cache)
+      if: ${{ env.HAS_DOTNET == 'true' }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "8.0.x"
+        cache: true
+
+    - name: Lint .NET (dotnet-format)
+      if: ${{ env.HAS_DOTNET == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${HAS_DOTNET}" = "true" ]; then
-          echo "🧩 Formatting .NET in $PROJECT_ROOT"
-          dotnet tool install -g dotnet-format
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          cd "$PROJECT_ROOT"
-          dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
-        else
-          echo "🧩 Skipping .NET formatting."
-        fi
+        echo "🧩 Formatting .NET in $PROJECT_ROOT"
+        export PATH="$PATH:$HOME/.dotnet/tools"
+        # Cache global tool binaries + NuGet packages (best-effort)
+        echo "::group::Install dotnet-format"
+        dotnet tool install -g dotnet-format || dotnet tool update -g dotnet-format
+        echo "::endgroup::"
+
+        cd "$PROJECT_ROOT"
+        dotnet restore || true
+        dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
+
+    # ---------- Flutter caching ----------
+    - name: Setup Flutter (cached SDK)
+      if: ${{ env.HAS_FLUTTER == 'true' }}
+      uses: subosito/flutter-action@v2
+      with:
+        channel: "stable"
+        cache: true
+
+    - name: Cache pub packages
+      if: ${{ env.HAS_FLUTTER == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.pub-cache
+          ${{ env.PROJECT_ROOT }}/.dart_tool
+        key: pub-${{ runner.os }}-${{ hashFiles(format('{0}/pubspec.lock', env.PROJECT_ROOT)) }}
+        restore-keys: |
+          pub-${{ runner.os }}-
 
     - name: Analyze Flutter
+      if: ${{ env.HAS_FLUTTER == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "${HAS_FLUTTER}" = "true" ]; then
-          echo "🪶 Analyzing Flutter in $PROJECT_ROOT"
-          git clone https://github.com/flutter/flutter.git -b stable --depth 1
-          export PATH="$PWD/flutter/bin:$PATH"
-          flutter doctor
-          cd "$PROJECT_ROOT"
-          flutter pub get
-          dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
-        else
-          echo "🪶 Skipping Flutter analysis."
-        fi
+        echo "🪶 Analyzing Flutter in $PROJECT_ROOT"
+        flutter --version
+        cd "$PROJECT_ROOT"
+        flutter pub get
+        dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
 
-    - name: Install Python deps for AI bot
+    # ---------- AI review ----------
+    - name: Install Python deps for AI bot (cached by pip)
       shell: bash
       run: |
         set -euo pipefail
