@@ -459,7 +459,7 @@ pr_files = {f.filename: f.patch for f in pr.get_files() if f.patch}
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"### File: `{file_path}`")
     md.append('')
-    md.append('| Line No. | Lint Rule / Error Message      | Suggested Fix (Summary)          |')
+    md.append('| Line No. | Issue / Error Message          | Suggested Fix (Summary)          |')
     md.append('|:--------:|:-------------------------------|:---------------------------------|')
 
     patch = pr_files.get(file_path, '') # Get the patch for the current file
