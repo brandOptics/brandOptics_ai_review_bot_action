@@ -389,7 +389,7 @@ runs:
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_key }}
-        GITHUB_TOKEN: ${{ inputs.github_token }
+        GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
         TARGET_TIMEZONE: Asia/Kolkata
