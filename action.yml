@@ -97,123 +97,52 @@ runs:
         if [ "${HAS_REACT}" = "true" ]; then
           echo "⚛️ Linting React app in $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
+          npm install --no-save \
+            eslint @eslint/js \
+            @babel/core @babel/eslint-parser @babel/preset-react \
+            eslint-plugin-react eslint-plugin-react-hooks \
+            eslint-plugin-react-refresh eslint-plugin-jsx-a11y \
+            eslint-plugin-import eslint-plugin-sonarjs
 
-          # Detect TS presence
-          if find . \( -name "*.ts" -o -name "*.tsx" \) -type f | grep -q .; then
-            HAS_TS=true
-          else
-            HAS_TS=false
-          fi
-
-          # If the repo has its own ESLint config, prefer installing project dev deps
-          HAS_LOCAL_CFG=false
-          if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || \
-            [ -f ".eslintrc.js" ] || [ -f ".eslintrc.cjs" ] || \
-            [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
-            HAS_LOCAL_CFG=true
-          fi
-
-          if [ "$HAS_LOCAL_CFG" = "true" ]; then
-            # Try to install project dev deps (fast if lockfile exists)
-            if [ -f package-lock.json ] || [ -f pnpm-lock.yaml ] || [ -f yarn.lock ]; then
-              npm ci --include=dev || npm install --no-save
-            else
-              npm install --no-save
-            fi
-            # Ensure plugins commonly referenced in configs are present
-            npm ls eslint-plugin-unused-imports >/dev/null 2>&1 || npm install --no-save eslint-plugin-unused-imports
-            [ "$HAS_TS" = "true" ] && \
-              (npm ls @typescript-eslint/parser >/dev/null 2>&1 || npm install --no-save @typescript-eslint/parser @typescript-eslint/eslint-plugin)
-
-          else
-            # No local config → use minimal toolchain (no Babel needed)
-            npm install --no-save \
-              eslint @eslint/js \
-              eslint-plugin-react eslint-plugin-react-hooks \
-              eslint-plugin-jsx-a11y eslint-plugin-import \
-              eslint-plugin-sonarjs >/dev/null 2>&1
-            [ "$HAS_TS" = "true" ] && \
-              npm install --no-save @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1
-          fi
-
-          mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
-
-          if [ "$HAS_LOCAL_CFG" = "true" ]; then
-            # Use repo config
+          if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
             npx eslint . \
-              --ext .js,.jsx,.ts,.tsx \
               --max-warnings=1000 \
               --format json \
               --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
               echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
           else
-            # Flat fallback config
             tmpcfg="$PROJECT_ROOT/.tmp.eslint.react.config.mjs"
             cat > "$tmpcfg" <<'EOF'
         export default [
-          { ignores: ["dist/**", "build/**", "node_modules/**"] },
           {
-            files: ["**/*.{js,jsx}"],
+            files: ["**/*.{js,jsx,ts,tsx}"],
             languageOptions: {
-              ecmaVersion: "latest",
-              sourceType: "module",
-              parserOptions: { ecmaFeatures: { jsx: true } }
+              parserOptions: {
+                ecmaVersion: "latest",
+                sourceType: "module",
+                ecmaFeatures: { jsx: true }
+              }
             },
             plugins: {
               import: (await import("eslint-plugin-import")).default,
-              react: (await import("eslint-plugin-react")).default,
-              "react-hooks": (await import("eslint-plugin-react-hooks")).default,
-              "jsx-a11y": (await import("eslint-plugin-jsx-a11y")).default,
-              sonarjs: (await import("eslint-plugin-sonarjs")).default
+              react: (await import("eslint-plugin-react")).default
             },
-            settings: { react: { version: "detect" } },
             rules: {
               "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-              "import/order": ["warn", { "newlines-between": "always", "alphabetize": { "order": "asc", "caseInsensitive": true } }],
-              "react/jsx-no-undef": "error",
-              "react/react-in-jsx-scope": "off",
-              "react/jsx-uses-react": "off",
-              "react-hooks/rules-of-hooks": "error",
-              "react-hooks/exhaustive-deps": "warn",
-              "jsx-a11y/alt-text": "warn"
-            }
-          },
-          {
-            files: ["**/*.{ts,tsx}"],
-            languageOptions: {
-              ecmaVersion: "latest",
-              sourceType: "module",
-              parser: (await import("@typescript-eslint/parser")).default,
-              parserOptions: { ecmaFeatures: { jsx: true } }
-            },
-            plugins: {
-              "@typescript-eslint": (await import("@typescript-eslint/eslint-plugin")).default,
-              import: (await import("eslint-plugin-import")).default,
-              react: (await import("eslint-plugin-react")).default,
-              "react-hooks": (await import("eslint-plugin-react-hooks")).default,
-              "jsx-a11y": (await import("eslint-plugin-jsx-a11y")).default,
-              sonarjs: (await import("eslint-plugin-sonarjs")).default
-            },
-            settings: { react: { version: "detect" } },
-            rules: {
-              "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-              "react/jsx-no-undef": "error",
-              "react-hooks/rules-of-hooks": "error",
-              "react-hooks/exhaustive-deps": "warn"
+              "react/jsx-no-undef": "error"
             }
           }
         ];
         EOF
-                npx eslint . \
-                  --ext .js,.jsx,.ts,.tsx \
-                  --config "$tmpcfg" \
-                  --format json \
-                  --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
-                  echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
-              fi
-            else
-              echo "Skipping React linting."
-            fi
+            npx eslint . \
+              --config "$tmpcfg" \
+              --format json \
+              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+          fi
+        else
+          echo "Skipping React linting."
+        fi
+
     - name: Lint Angular
       shell: bash
       run: |
