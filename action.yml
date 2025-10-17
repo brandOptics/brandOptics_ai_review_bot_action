@@ -23,49 +23,20 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-
-        # Find first package.json outside node_modules for PROJECT_ROOT
         pkg=$(find . -type f -name package.json -not -path "*/node_modules/*" | head -n1 || true)
-        if [ -n "${pkg:-}" ]; then
-          root=$(dirname "$pkg")
-        else
-          root="."
-        fi
+        if [ -n "${pkg:-}" ]; then root=$(dirname "$pkg"); else root="."; fi
         echo "PROJECT_ROOT=$root" >> "$GITHUB_ENV"
 
-        # Initialize flags
-        HAS_NODE=false
-        HAS_REACT=false
-        HAS_ANGULAR=false
-        HAS_PY=false
-        HAS_DOTNET=false
-        HAS_FLUTTER=false
+        HAS_NODE=false; HAS_REACT=false; HAS_ANGULAR=false; HAS_PY=false; HAS_DOTNET=false; HAS_FLUTTER=false
 
-        if find . -type f \( -name "package.json" -o -name "package-lock.json" -o -name "yarn.lock" -o -name "pnpm-lock.yaml" \) \
-             -not -path "*/node_modules/*" | grep -q .; then
-          HAS_NODE=true
-        fi
-
+        if find . -type f \( -name "package.json" -o -name "package-lock.json" -o -name "yarn.lock" -o -name "pnpm-lock.yaml" \) -not -path "*/node_modules/*" | grep -q .; then HAS_NODE=true; fi
         if [ -f "$root/package.json" ]; then
-          if grep -q '"react"[[:space:]]*:' "$root/package.json"; then
-            HAS_REACT=true
-          fi
-          if grep -q '"@angular/core"[[:space:]]*:' "$root/package.json"; then
-            HAS_ANGULAR=true
-          fi
+          if grep -q '"react"[[:space:]]*:' "$root/package.json"; then HAS_REACT=true; fi
+          if grep -q '"@angular/core"[[:space:]]*:' "$root/package.json"; then HAS_ANGULAR=true; fi
         fi
-
-        if find "$root" -type f -name '*.py' | grep -q .; then
-          HAS_PY=true
-        fi
-
-        if find "$root" -type f -name '*.sln' | grep -q .; then
-          HAS_DOTNET=true
-        fi
-
-        if find "$root" -type f -name 'pubspec.yaml' | grep -q .; then
-          HAS_FLUTTER=true
-        fi
+        if find "$root" -type f -name '*.py' | grep -q .; then HAS_PY=true; fi
+        if find "$root" -type f -name '*.sln' | grep -q .; then HAS_DOTNET=true; fi
+        if find "$root" -type f -name 'pubspec.yaml' | grep -q .; then HAS_FLUTTER=true; fi
 
         {
           echo "HAS_NODE=$HAS_NODE"
@@ -76,190 +47,310 @@ runs:
           echo "HAS_FLUTTER=$HAS_FLUTTER"
         } >> "$GITHUB_ENV"
 
-    - name: Prepare reports & caches dir
+    - name: Prepare reports directory
       shell: bash
-      run: |
-        mkdir -p .github/linter-reports
-        mkdir -p .cache/eslint
+      run: mkdir -p .github/linter-reports
 
-    # ---------- Node / React / Angular caching ----------
-    - name: Setup Node.js (with npm cache)
-      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: "20"
-        cache: "npm"
-        cache-dependency-path: ${{ env.PROJECT_ROOT }}/package-lock.json
+    # ---------- Runtimes + CACHES ----------
 
-    - name: Cache ESLint cache file
-      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
-      uses: actions/cache@v4
-      with:
-        path: .cache/eslint
-        key: eslint-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', env.PROJECT_ROOT)) }}-${{ hashFiles('**/.eslintrc.*', '**/eslint.config.*') }}
-        restore-keys: |
-          eslint-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', env.PROJECT_ROOT)) }}-
-          eslint-${{ runner.os }}-
-
-    - name: Lint React / Next.js (uses project deps, cached)
-      if: ${{ env.HAS_REACT == 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "⚛️ Linting React/Next in $PROJECT_ROOT"
-        cd "$PROJECT_ROOT"
-
-        # Use project deps (fast w/ npm cache). If lockfile exists, CI install.
-        if [ -f package-lock.json ]; then
-          npm ci --no-audit --no-fund
-        else
-          npm install --no-audit --no-fund
-        fi
-
-        # Respect repo config; fall back to safe defaults
-        TARGETS=(
-          "app/**/*.{js,jsx,ts,tsx}"
-          "pages/**/*.{js,jsx,ts,tsx}"
-          "components/**/*.{js,jsx,ts,tsx}"
-          "src/**/*.{js,jsx,ts,tsx}"
-        )
-        mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
-
-        # Use ESLint cache for speed
-        npx eslint "${TARGETS[@]}" \
-          --cache \
-          --cache-location "$GITHUB_WORKSPACE/.cache/eslint/.eslintcache" \
-          --format json \
-          --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" \
-          || true
-        echo "✅ ESLint finished."
-
-    - name: Lint Angular (uses project deps, cached)
-      if: ${{ env.HAS_ANGULAR == 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "🛡️ Linting Angular in $PROJECT_ROOT"
-        cd "$PROJECT_ROOT"
-
-        if [ -f package-lock.json ]; then
-          npm ci --no-audit --no-fund
-        else
-          npm install --no-audit --no-fund
-        fi
-
-        mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
-        npx eslint 'src/**/*.{ts,tsx}' \
-          --cache \
-          --cache-location "$GITHUB_WORKSPACE/.cache/eslint/.eslintcache" \
-          --format json \
-          --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-
-    - name: Lint Node/JS/TS (generic; uses project deps, cached)
-      if: ${{ env.HAS_NODE == 'true' && env.HAS_REACT != 'true' && env.HAS_ANGULAR != 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "🟩 Generic Node/JS/TS lint in $PROJECT_ROOT"
-        cd "$PROJECT_ROOT"
-
-        if [ -f package-lock.json ]; then
-          npm ci --no-audit --no-fund
-        else
-          npm install --no-audit --no-fund
-        fi
-
-        mkdir -p "$GITHUB_WORKSPACE/.github/linter-reports"
-        npx eslint . \
-          --cache \
-          --cache-location "$GITHUB_WORKSPACE/.cache/eslint/.eslintcache" \
-          --format json \
-          --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-
-    # ---------- Python caching ----------
-    - name: Setup Python (with pip cache)
+    - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
-        cache: "pip"
+
+    - name: Cache pip
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: pip-${{ runner.os }}-3x
+
+    - name: Setup Node.js
+      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18"
+        cache: "npm"
         cache-dependency-path: |
-          ${{ env.PROJECT_ROOT }}/requirements.txt
-          ${{ env.PROJECT_ROOT }}/requirements-dev.txt
+          ${{ env.PROJECT_ROOT }}/package-lock.json
+          ${{ env.PROJECT_ROOT }}/yarn.lock
+          ${{ env.PROJECT_ROOT }}/pnpm-lock.yaml
 
-    - name: Lint Python (flake8)
-      if: ${{ env.HAS_PY == 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "🐍 Linting Python in $PROJECT_ROOT"
-        python -m pip install --upgrade pip
-        pip install flake8 flake8-json
-        cd "$PROJECT_ROOT"
-        if find . -type f -name "*.py" | grep -q .; then
-          flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
-        fi
-
-    # ---------- .NET caching ----------
-    - name: Setup .NET (with NuGet cache)
-      if: ${{ env.HAS_DOTNET == 'true' }}
-      uses: actions/setup-dotnet@v4
+    - name: Cache node_modules (fallback)
+      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
+      uses: actions/cache@v4
       with:
-        dotnet-version: "8.0.x"
-        cache: true
+        path: |
+          ${{ env.PROJECT_ROOT }}/node_modules
+          **/node_modules
+        key: node-mods-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', env.PROJECT_ROOT, 'package-lock.json'), format('{0}/{1}', env.PROJECT_ROOT, 'yarn.lock'), format('{0}/{1}', env.PROJECT_ROOT, 'pnpm-lock.yaml')) }}
 
-    - name: Lint .NET (dotnet-format)
-      if: ${{ env.HAS_DOTNET == 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "🧩 Formatting .NET in $PROJECT_ROOT"
-        export PATH="$PATH:$HOME/.dotnet/tools"
-        # Cache global tool binaries + NuGet packages (best-effort)
-        echo "::group::Install dotnet-format"
-        dotnet tool install -g dotnet-format || dotnet tool update -g dotnet-format
-        echo "::endgroup::"
-
-        cd "$PROJECT_ROOT"
-        dotnet restore || true
-        dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
-
-    # ---------- Flutter caching ----------
-    - name: Setup Flutter (cached SDK)
+    - name: Compute Flutter stable ref (cache key)
       if: ${{ env.HAS_FLUTTER == 'true' }}
-      uses: subosito/flutter-action@v2
+      id: flutterref
+      shell: bash
+      run: |
+        set -euo pipefail
+        rev=$(git ls-remote https://github.com/flutter/flutter.git stable | awk '{print $1}')
+        echo "ref=$rev" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Flutter SDK
+      if: ${{ env.HAS_FLUTTER == 'true' }}
+      uses: actions/cache@v4
       with:
-        channel: "stable"
-        cache: true
+        path: flutter
+        key: flutter-${{ steps.flutterref.outputs.ref }}
 
     - name: Cache pub packages
       if: ${{ env.HAS_FLUTTER == 'true' }}
       uses: actions/cache@v4
       with:
+        path: ~/.pub-cache
+        key: pub-${{ runner.os }}-${{ steps.flutterref.outputs.ref }}
+
+    - name: Cache .NET tools/NuGet
+      if: ${{ env.HAS_DOTNET == 'true' }}
+      uses: actions/cache@v4
+      with:
         path: |
-          ~/.pub-cache
-          ${{ env.PROJECT_ROOT }}/.dart_tool
-        key: pub-${{ runner.os }}-${{ hashFiles(format('{0}/pubspec.lock', env.PROJECT_ROOT)) }}
-        restore-keys: |
-          pub-${{ runner.os }}-
+          ~/.dotnet/tools
+          ~/.nuget/packages
+        key: dotnet-${{ runner.os }}-${{ hashFiles('**/*.sln', '**/*.csproj', '**/*.props', '**/*.targets') }}
 
+    # ---------- Lint: React (with REACT_GLOBALS like Node) ----------
+
+    - name: Lint React
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_REACT}" = "true" ]; then
+          echo "⚛️ Linting React app in $PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+
+          npm install --no-save \
+            eslint @eslint/js \
+            @babel/core @babel/eslint-parser @babel/preset-react \
+            eslint-plugin-react eslint-plugin-react-hooks \
+            eslint-plugin-react-refresh eslint-plugin-jsx-a11y \
+            eslint-plugin-import >/dev/null 2>&1 || true
+
+          if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
+            npx eslint . \
+              --max-warnings=1000 \
+              --format json \
+              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
+              echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
+          else
+            tmpcfg="$PROJECT_ROOT/.tmp.eslint.react.config.mjs"
+            cat > "$tmpcfg" <<'EOF'
+        export default [
+          {
+            files: ["**/*.{js,jsx,ts,tsx}"],
+            languageOptions: {
+              parser: (await import("@babel/eslint-parser")).default,
+              parserOptions: {
+                ecmaVersion: "latest",
+                sourceType: "module",
+                ecmaFeatures: { jsx: true },
+                requireConfigFile: false,
+                babelOptions: { presets: ["@babel/preset-react"] }
+              },
+              // === REACT_GLOBALS (Node-style map, browser equivalents) ===
+              globals: {
+                // Console & performance (overlap with Node style)
+                console: "readonly",
+                performance: "readonly",
+                queueMicrotask: "readonly",
+
+                // Timers / RAF
+                setTimeout: "readonly",
+                clearTimeout: "readonly",
+                setInterval: "readonly",
+                clearInterval: "readonly",
+                requestAnimationFrame: "readonly",
+                cancelAnimationFrame: "readonly",
+
+                // Browser env
+                window: "readonly",
+                document: "readonly",
+                navigator: "readonly",
+                location: "readonly",
+                history: "readonly",
+
+                // Storage
+                localStorage: "readonly",
+                sessionStorage: "readonly",
+
+                // Fetch API / URL
+                fetch: "readonly",
+                Request: "readonly",
+                Response: "readonly",
+                Headers: "readonly",
+                URL: "readonly",
+                URLSearchParams: "readonly",
+
+                // Text / Abort (matches your Node list)
+                TextEncoder: "readonly",
+                TextDecoder: "readonly",
+                AbortController: "readonly"
+              }
+            },
+            plugins: {
+              import: (await import("eslint-plugin-import")).default,
+              react: (await import("eslint-plugin-react")).default,
+              "react-hooks": (await import("eslint-plugin-react-hooks")).default,
+              "jsx-a11y": (await import("eslint-plugin-jsx-a11y")).default
+            },
+            rules: {
+              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+              "react/jsx-no-undef": "error",
+              "react-hooks/rules-of-hooks": "error",
+              "react-hooks/exhaustive-deps": "warn"
+            },
+            settings: { react: { version: "detect" } }
+          }
+        ];
+        EOF
+                    npx eslint . \
+                      --config "$tmpcfg" \
+                      --format json \
+                      --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+                  fi
+                else
+                  echo "⚛️ Skipping React linting."
+                fi
+
+    # ---------- Lint: Angular ----------
+    - name: Lint Angular
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_ANGULAR}" = "true" ]; then
+          echo "🛡️ Linting Angular app in $PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+          npm install --no-save \
+            eslint @eslint/js \
+            @angular-eslint/eslint-plugin @angular-eslint/eslint-config \
+            eslint-plugin-import >/dev/null 2>&1 || true
+          npx eslint 'src/**/*.{ts,tsx}' \
+            --format json \
+            --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+        else
+          echo "🛡️ Skipping Angular linting."
+        fi
+
+    # ---------- Lint: Generic Node ----------
+    - name: Lint Node/JS/TS (generic)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_NODE}" = "true" ] && [ "${HAS_REACT}" = "false" ] && [ "${HAS_ANGULAR}" = "false" ]; then
+          echo "🟩 Generic Node/JS/TS lint in $PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+
+          if find . \( -name "*.ts" -o -name "*.tsx" \) -type f | grep -q .; then HAS_TS=true; else HAS_TS=false; fi
+
+          npm install --no-save eslint @eslint/js eslint-plugin-import >/dev/null 2>&1 || true
+          if [ "$HAS_TS" = "true" ]; then
+            npm install --no-save typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin >/dev/null 2>&1 || true
+          fi
+
+          tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
+          cat > "$tmpcfg" <<'EOF'
+        const js = (await import("@eslint/js")).default;
+        // Inline Node globals (readonly)
+        const NODE_GLOBALS = {
+          console: "readonly", process: "readonly", module: "readonly", require: "readonly",
+          __dirname: "readonly", __filename: "readonly", exports: "readonly", global: "readonly",
+          setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly",
+          setImmediate: "readonly", clearImmediate: "readonly",
+          Buffer: "readonly", URL: "readonly", URLSearchParams: "readonly",
+          queueMicrotask: "readonly", performance: "readonly", AbortController: "readonly",
+          TextEncoder: "readonly", TextDecoder: "readonly",
+        };
+        let tsParser; try { tsParser = (await import("@typescript-eslint/parser")).default; } catch (_) { tsParser = undefined; }
+        export default [
+          js.configs.recommended,
+          {
+            files: ["**/*.{js,jsx,ts,tsx}"],
+            languageOptions: {
+              ecmaVersion: "latest",
+              sourceType: "module",
+              ...(tsParser ? { parser: tsParser } : {}),
+              globals: { ...NODE_GLOBALS },
+            },
+            plugins: { import: (await import("eslint-plugin-import")).default },
+            rules: { "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }], "no-undef": "error" }
+          }
+        ];
+        EOF
+
+                  npx eslint . \
+                    --config "$tmpcfg" \
+                    --format json \
+                    --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+                else
+                  echo "🟩 Skipping generic Node lint (either not Node, or handled by React/Angular step)."
+                fi
+
+    # ---------- Lint: Python ----------
+    - name: Lint Python
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_PY}" = "true" ]; then
+          echo "🐍 Linting Python in $PROJECT_ROOT"
+          python -m pip install --upgrade pip >/dev/null 2>&1 || true
+          pip install flake8 flake8-json >/dev/null 2>&1 || true
+          cd "$PROJECT_ROOT"
+          if find . -type f -name "*.py" | grep -q .; then
+            flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
+          fi
+        else
+          echo "🐍 Skipping Python linting."
+        fi
+
+    # ---------- Lint: .NET ----------
+    - name: Lint .NET
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_DOTNET}" = "true" ]; then
+          echo "🧩 Formatting .NET in $PROJECT_ROOT"
+          dotnet tool install -g dotnet-format >/dev/null 2>&1 || true
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          cd "$PROJECT_ROOT"
+          dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
+        else
+          echo "🧩 Skipping .NET formatting."
+        fi
+
+    # ---------- Analyze: Flutter ----------
     - name: Analyze Flutter
-      if: ${{ env.HAS_FLUTTER == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        echo "🪶 Analyzing Flutter in $PROJECT_ROOT"
-        flutter --version
-        cd "$PROJECT_ROOT"
-        flutter pub get
-        dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
+        if [ "${HAS_FLUTTER}" = "true" ]; then
+          echo "🪶 Analyzing Flutter in $PROJECT_ROOT"
+          if [ ! -d "flutter" ]; then
+            git clone https://github.com/flutter/flutter.git -b stable --depth 1
+          fi
+          export PATH="$PWD/flutter/bin:$PATH"
+          flutter --version
+          flutter doctor -v
+          cd "$PROJECT_ROOT"
+          flutter pub get
+          dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
+        else
+          echo "🪶 Skipping Flutter analysis."
+        fi
 
-    # ---------- AI review ----------
-    - name: Install Python deps for AI bot (cached by pip)
+    # ---------- AI Review ----------
+    - name: Install Python deps for AI bot
       shell: bash
       run: |
         set -euo pipefail
-        python -m pip install --upgrade pip
-        pip install openai PyGithub pytz
+        python -m pip install --upgrade pip >/dev/null 2>&1 || true
+        pip install openai PyGithub pytz >/dev/null 2>&1 || true
 
     - name: Run the AI review
       shell: bash
