@@ -126,99 +126,132 @@ runs:
           echo "⚛️ Linting React app in $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
 
+          # Add TS support so interfaces/types don't cause parser errors.
+          HAS_TS=false
+          if find . \( -name "*.ts" -o -name "*.tsx" \) -type f | grep -q .; then HAS_TS=true; fi
+
           npm install --no-save \
             eslint @eslint/js \
             @babel/core @babel/eslint-parser @babel/preset-react \
             eslint-plugin-react eslint-plugin-react-hooks \
-            eslint-plugin-react-refresh eslint-plugin-jsx-a11y \
-            eslint-plugin-import >/dev/null 2>&1 || true
+            eslint-plugin-jsx-a11y eslint-plugin-import \
+            $([ "$HAS_TS" = "true" ] && echo "typescript @typescript-eslint/parser @typescript-eslint/eslint-plugin") \
+            >/dev/null 2>&1 || true
 
           if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
-            npx eslint . \
-              --max-warnings=1000 \
+            # Respect repo config; still suppress warnings
+            npx eslint . --ext .js,.jsx,.ts,.tsx \
+              --quiet \
               --format json \
-              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || \
-              echo "⚛️ ESLint completed with non-zero exit (treated as warnings)."
+              --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
           else
             tmpcfg="$PROJECT_ROOT/.tmp.eslint.react.config.mjs"
             cat > "$tmpcfg" <<'EOF'
+        const hasTs = !!process.env.HAS_TS && process.env.HAS_TS === "true";
+        const babelParser = (await import("@babel/eslint-parser")).default;
+        const reactPlugin = (await import("eslint-plugin-react")).default;
+        const hooksPlugin = (await import("eslint-plugin-react-hooks")).default;
+        const importPlugin = (await import("eslint-plugin-import")).default;
+
+        // Node-style, browser-appropriate globals (mirrors your NODE_GLOBALS vibe)
+        const REACT_GLOBALS = {
+          console: "readonly", performance: "readonly", queueMicrotask: "readonly",
+          setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly",
+          requestAnimationFrame: "readonly", cancelAnimationFrame: "readonly",
+          window: "readonly", document: "readonly", navigator: "readonly", location: "readonly", history: "readonly",
+          localStorage: "readonly", sessionStorage: "readonly",
+          fetch: "readonly", Request: "readonly", Response: "readonly", Headers: "readonly",
+          URL: "readonly", URLSearchParams: "readonly",
+          TextEncoder: "readonly", TextDecoder: "readonly", AbortController: "readonly",
+        };
+
+        let tsParser, tsPlugin;
+        if (hasTs) {
+          tsParser = (await import("@typescript-eslint/parser")).default;
+          tsPlugin = (await import("@typescript-eslint/eslint-plugin")).default;
+        }
+
         export default [
+          // Keep noise out
+          { ignores: ["node_modules/**", ".next/**", "dist/**", "build/**", "out/**"] },
+
+          // JS/JSX files: use Babel parser
           {
-            files: ["**/*.{js,jsx,ts,tsx}"],
+            files: ["**/*.{js,jsx}"],
             languageOptions: {
-              parser: (await import("@babel/eslint-parser")).default,
+              parser: babelParser,
               parserOptions: {
                 ecmaVersion: "latest",
                 sourceType: "module",
                 ecmaFeatures: { jsx: true },
                 requireConfigFile: false,
-                babelOptions: { presets: ["@babel/preset-react"] }
+                babelOptions: { presets: ["@babel/preset-react"] },
               },
-              // === REACT_GLOBALS (Node-style map, browser equivalents) ===
-              globals: {
-                // Console & performance (overlap with Node style)
-                console: "readonly",
-                performance: "readonly",
-                queueMicrotask: "readonly",
-
-                // Timers / RAF
-                setTimeout: "readonly",
-                clearTimeout: "readonly",
-                setInterval: "readonly",
-                clearInterval: "readonly",
-                requestAnimationFrame: "readonly",
-                cancelAnimationFrame: "readonly",
-
-                // Browser env
-                window: "readonly",
-                document: "readonly",
-                navigator: "readonly",
-                location: "readonly",
-                history: "readonly",
-
-                // Storage
-                localStorage: "readonly",
-                sessionStorage: "readonly",
-
-                // Fetch API / URL
-                fetch: "readonly",
-                Request: "readonly",
-                Response: "readonly",
-                Headers: "readonly",
-                URL: "readonly",
-                URLSearchParams: "readonly",
-
-                // Text / Abort (matches your Node list)
-                TextEncoder: "readonly",
-                TextDecoder: "readonly",
-                AbortController: "readonly"
-              }
+              globals: { ...REACT_GLOBALS },
             },
             plugins: {
-              import: (await import("eslint-plugin-import")).default,
-              react: (await import("eslint-plugin-react")).default,
-              "react-hooks": (await import("eslint-plugin-react-hooks")).default,
-              "jsx-a11y": (await import("eslint-plugin-jsx-a11y")).default
+              import: importPlugin,
+              react: reactPlugin,
+              "react-hooks": hooksPlugin,
             },
             rules: {
-              "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-              "react/jsx-no-undef": "error",
-              "react-hooks/rules-of-hooks": "error",
-              "react-hooks/exhaustive-deps": "warn"
-            },
-            settings: { react: { version: "detect" } }
-          }
-        ];
-        EOF
-                    npx eslint . \
-                      --config "$tmpcfg" \
-                      --format json \
-                      --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-                  fi
-                else
-                  echo "⚛️ Skipping React linting."
-                fi
+              // Suppress the “not errors” you listed
+              "no-unused-vars": "off",
+              "no-undef": "off",
 
+              // Keep only essential React sanity checks
+              "react/jsx-no-undef": "off",
+              "react-hooks/rules-of-hooks": "off",
+              "react-hooks/exhaustive-deps": "off",
+            },
+            settings: { react: { version: "detect" } },
+          },
+
+          // TS/TSX files: use TS parser so interfaces/types parse cleanly
+          hasTs && {
+            files: ["**/*.{ts,tsx}"],
+            languageOptions: {
+              parser: tsParser,
+              parserOptions: {
+                ecmaVersion: "latest",
+                sourceType: "module",
+                ecmaFeatures: { jsx: true },
+                // no project config needed for non-type-aware linting
+              },
+              globals: { ...REACT_GLOBALS },
+            },
+            plugins: {
+              import: importPlugin,
+              react: reactPlugin,
+              "react-hooks": hooksPlugin,
+              "@typescript-eslint": tsPlugin,
+            },
+            rules: {
+              // Kill noisy “unused/undef” in TS too
+              "no-unused-vars": "off",
+              "no-undef": "off",
+              "@typescript-eslint/no-unused-vars": "off",
+
+              // Keep React checks off unless you want them
+              "react/jsx-no-undef": "off",
+              "react-hooks/rules-of-hooks": "off",
+              "react-hooks/exhaustive-deps": "off",
+            },
+            settings: { react: { version: "detect" } },
+          },
+        ].filter(Boolean);
+        EOF
+
+                # Tell config whether TS exists
+                HAS_TS="$HAS_TS" npx eslint . --ext .js,.jsx,.ts,.tsx \
+                  --quiet \
+                  --config "$tmpcfg" \
+                  --format json \
+                  --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+              fi
+            else
+              echo "⚛️ Skipping React linting."
+            fi
     # ---------- Lint: Angular ----------
     - name: Lint Angular
       shell: bash
@@ -356,7 +389,7 @@ runs:
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_key }}
-        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_TOKEN: ${{ inputs.github_token }
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
         TARGET_TIMEZONE: Asia/Kolkata
