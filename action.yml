@@ -23,20 +23,20 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        pkg=$(find . -type f -name package.json -not -path "*/node_modules/*" | head -n1 || true)
-        if [ -n "${pkg:-}" ]; then root=$(dirname "$pkg"); else root="."; fi
+        pkg="$(find . -type f -name 'package.json' -not -path '*/node_modules/*' -print -quit || true)"
+        if [ -n "${pkg:-}" ]; then root="$(dirname "$pkg")"; else root="."; fi
         echo "PROJECT_ROOT=$root" >> "$GITHUB_ENV"
 
         HAS_NODE=false; HAS_REACT=false; HAS_ANGULAR=false; HAS_PY=false; HAS_DOTNET=false; HAS_FLUTTER=false
 
-        if find . -type f \( -name "package.json" -o -name "package-lock.json" -o -name "yarn.lock" -o -name "pnpm-lock.yaml" \) -not -path "*/node_modules/*" | grep -q .; then HAS_NODE=true; fi
+        if [ -n "$(find . -type f \( -name 'package.json' -o -name 'package-lock.json' -o -name 'yarn.lock' -o -name 'pnpm-lock.yaml' \) -not -path '*/node_modules/*' -print -quit)" ]; then HAS_NODE=true; fi
         if [ -f "$root/package.json" ]; then
           if grep -q '"react"[[:space:]]*:' "$root/package.json"; then HAS_REACT=true; fi
           if grep -q '"@angular/core"[[:space:]]*:' "$root/package.json"; then HAS_ANGULAR=true; fi
         fi
-        if find "$root" -type f -name '*.py' | grep -q .; then HAS_PY=true; fi
-        if find "$root" -type f -name '*.sln' | grep -q .; then HAS_DOTNET=true; fi
-        if find "$root" -type f -name 'pubspec.yaml' | grep -q .; then HAS_FLUTTER=true; fi
+        if [ -n "$(find "$root" -type f -name '*.py' -print -quit)" ]; then HAS_PY=true; fi
+        if [ -n "$(find "$root" -type f -name '*.sln' -print -quit)" ]; then HAS_DOTNET=true; fi
+        if [ -n "$(find "$root" -type f -name 'pubspec.yaml' -print -quit)" ]; then HAS_FLUTTER=true; fi
 
         {
           echo "HAS_NODE=$HAS_NODE"
@@ -52,7 +52,6 @@ runs:
       run: mkdir -p .github/linter-reports
 
     # ---------- Runtimes + CACHES ----------
-
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
@@ -117,7 +116,6 @@ runs:
         key: dotnet-${{ runner.os }}-${{ hashFiles('**/*.sln', '**/*.csproj', '**/*.props', '**/*.targets') }}
 
     # ---------- Lint: React (with REACT_GLOBALS like Node) ----------
-
     - name: Lint React
       shell: bash
       run: |
@@ -126,9 +124,9 @@ runs:
           echo "⚛️ Linting React app in $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
 
-          # Add TS support so interfaces/types don't cause parser errors.
+          # TS detection (no pipes)
           HAS_TS=false
-          if find . \( -name "*.ts" -o -name "*.tsx" \) -type f | grep -q .; then HAS_TS=true; fi
+          if [ -n "$(find . -type f \( -name '*.ts' -o -name '*.tsx' \) -print -quit)" ]; then HAS_TS=true; fi
 
           npm install --no-save \
             eslint @eslint/js \
@@ -139,7 +137,6 @@ runs:
             >/dev/null 2>&1 || true
 
           if [ -f "eslint.config.js" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f ".eslintrc" ]; then
-            # Respect repo config; still suppress warnings
             npx eslint . --ext .js,.jsx,.ts,.tsx \
               --quiet \
               --format json \
@@ -153,7 +150,7 @@ runs:
         const hooksPlugin = (await import("eslint-plugin-react-hooks")).default;
         const importPlugin = (await import("eslint-plugin-import")).default;
 
-        // Node-style, browser-appropriate globals (mirrors your NODE_GLOBALS vibe)
+        // Node-style, browser-appropriate globals (mirrors NODE_GLOBALS)
         const REACT_GLOBALS = {
           console: "readonly", performance: "readonly", queueMicrotask: "readonly",
           setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly",
@@ -172,10 +169,9 @@ runs:
         }
 
         export default [
-          // Keep noise out
           { ignores: ["node_modules/**", ".next/**", "dist/**", "build/**", "out/**"] },
 
-          // JS/JSX files: use Babel parser
+          // JS/JSX
           {
             files: ["**/*.{js,jsx}"],
             languageOptions: {
@@ -195,11 +191,8 @@ runs:
               "react-hooks": hooksPlugin,
             },
             rules: {
-              // Suppress the “not errors” you listed
               "no-unused-vars": "off",
               "no-undef": "off",
-
-              // Keep only essential React sanity checks
               "react/jsx-no-undef": "off",
               "react-hooks/rules-of-hooks": "off",
               "react-hooks/exhaustive-deps": "off",
@@ -207,7 +200,7 @@ runs:
             settings: { react: { version: "detect" } },
           },
 
-          // TS/TSX files: use TS parser so interfaces/types parse cleanly
+          // TS/TSX
           hasTs && {
             files: ["**/*.{ts,tsx}"],
             languageOptions: {
@@ -216,7 +209,6 @@ runs:
                 ecmaVersion: "latest",
                 sourceType: "module",
                 ecmaFeatures: { jsx: true },
-                // no project config needed for non-type-aware linting
               },
               globals: { ...REACT_GLOBALS },
             },
@@ -227,12 +219,9 @@ runs:
               "@typescript-eslint": tsPlugin,
             },
             rules: {
-              // Kill noisy “unused/undef” in TS too
               "no-unused-vars": "off",
               "no-undef": "off",
               "@typescript-eslint/no-unused-vars": "off",
-
-              // Keep React checks off unless you want them
               "react/jsx-no-undef": "off",
               "react-hooks/rules-of-hooks": "off",
               "react-hooks/exhaustive-deps": "off",
@@ -241,17 +230,16 @@ runs:
           },
         ].filter(Boolean);
         EOF
+                    HAS_TS="$HAS_TS" npx eslint . --ext .js,.jsx,.ts,.tsx \
+                      --quiet \
+                      --config "$tmpcfg" \
+                      --format json \
+                      --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+                  fi
+                else
+                  echo "⚛️ Skipping React linting."
+                fi
 
-                # Tell config whether TS exists
-                HAS_TS="$HAS_TS" npx eslint . --ext .js,.jsx,.ts,.tsx \
-                  --quiet \
-                  --config "$tmpcfg" \
-                  --format json \
-                  --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
-              fi
-            else
-              echo "⚛️ Skipping React linting."
-            fi
     # ---------- Lint: Angular ----------
     - name: Lint Angular
       shell: bash
@@ -280,7 +268,7 @@ runs:
           echo "🟩 Generic Node/JS/TS lint in $PROJECT_ROOT"
           cd "$PROJECT_ROOT"
 
-          if find . \( -name "*.ts" -o -name "*.tsx" \) -type f | grep -q .; then HAS_TS=true; else HAS_TS=false; fi
+          if [ -n "$(find . -type f \( -name '*.ts' -o -name '*.tsx' \) -print -quit)" ]; then HAS_TS=true; else HAS_TS=false; fi
 
           npm install --no-save eslint @eslint/js eslint-plugin-import >/dev/null 2>&1 || true
           if [ "$HAS_TS" = "true" ]; then
@@ -290,7 +278,6 @@ runs:
           tmpcfg="$PROJECT_ROOT/.tmp.eslint.node.config.mjs"
           cat > "$tmpcfg" <<'EOF'
         const js = (await import("@eslint/js")).default;
-        // Inline Node globals (readonly)
         const NODE_GLOBALS = {
           console: "readonly", process: "readonly", module: "readonly", require: "readonly",
           __dirname: "readonly", __filename: "readonly", exports: "readonly", global: "readonly",
@@ -335,7 +322,7 @@ runs:
           python -m pip install --upgrade pip >/dev/null 2>&1 || true
           pip install flake8 flake8-json >/dev/null 2>&1 || true
           cd "$PROJECT_ROOT"
-          if find . -type f -name "*.py" | grep -q .; then
+          if [ -n "$(find . -type f -name '*.py' -print -quit)" ]; then
             flake8 . --format=json --output-file "$GITHUB_WORKSPACE/.github/linter-reports/flake8.json" || true
           fi
         else
@@ -349,7 +336,7 @@ runs:
         set -euo pipefail
         if [ "${HAS_DOTNET}" = "true" ]; then
           echo "🧩 Formatting .NET in $PROJECT_ROOT"
-          dotnet tool install -g dotnet-format >/dev/null 2>&1 || true
+          dotnet tool install -g dotnet-format >/dev/null 2}&1 || true
           export PATH="$PATH:$HOME/.dotnet/tools"
           cd "$PROJECT_ROOT"
           dotnet format --verify-no-changes --report "$GITHUB_WORKSPACE/.github/linter-reports/dotnet-format.json" || true
