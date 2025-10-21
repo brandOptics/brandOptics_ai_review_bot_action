@@ -60,6 +60,62 @@ jobs:
 
 ## Flutter Setup
 
+Create `.github/workflows/ci.yml` in your project repository:
+
+```yaml
+name: "brandOptics AI Neural Nexus Code Review"
+ 
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+ 
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+ 
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Always checkout first
+      - name: Checkout code
+        uses: actions/checkout@v4
+ 
+      - name: Clone eit_design_system_flutter outside workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent="$(dirname "$GITHUB_WORKSPACE")"   # /home/runner/work/retail-flutter
+          mkdir -p "$parent/packages"
+
+          # mark safe for any git ops
+          git config --global --add safe.directory "$parent/packages/eit_design_system_flutter" || true
+
+          # clone the private repo with PAT
+          git clone \
+            --depth 1 \
+            --branch retail_app_ceramic_pot \
+            "https://x-access-token:${{ secrets.REVIEW_ENGINE_PAT }}@github.com/brandOptics/eit_design_system_flutter.git" \
+            "$parent/packages/eit_design_system_flutter"
+
+          # sanity check
+          test -f "$parent/packages/eit_design_system_flutter/pubspec.yaml" && echo "✅ external package ready"
+      
+      - name: Check relative path
+        run: |
+          echo "Current directory: $(pwd)"
+          test -f ../packages/eit_design_system_flutter/pubspec.yaml && echo "✅ Found package"
+      # 2) Invoke your composite Action
+      - name: Run brandOptics AI review
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
+        with:
+          openai_key: ${{ secrets.OPENAI_API_KEY}}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+
+
 Add the following `analysis_options.yaml` file to the root of your Flutter project (next to `pubspec.yaml`).
 
 ```yaml
@@ -386,7 +442,7 @@ module.exports = [
 1. Navigate to your GitHub repository
 2. Go to **Settings** → **Secrets and variables** → **Actions**
 3. Click **New repository secret**
-4. Name: `OPENAI_API_KEY`
+4. Name: `OPENAI_API_KEY &  secrets.REVIEW_ENGINE_PAT `  REVIEW_ENGINE_PAT => is the organizaton developer key, which need to set 
 5. Value: Your OpenAI secret key
 
 ✅ `GITHUB_TOKEN` is auto-injected by GitHub.
