@@ -61,6 +61,7 @@ jobs:
 ## Flutter Setup
 
 Create `.github/workflows/ci.yml` in your project repository:
+When working with multiple repository dependencies (such as packages), they must be cloned into the appropriate folder structure using the steps outlined below.
 
 ```yaml
 name: "brandOptics AI Neural Nexus Code Review"
@@ -81,7 +82,7 @@ jobs:
       # 1) Always checkout first
       - name: Checkout code
         uses: actions/checkout@v4
- 
+      # 2) Clone dependencies repos 
       - name: Clone eit_design_system_flutter outside workspace
         shell: bash
         run: |
@@ -101,12 +102,12 @@ jobs:
 
           # sanity check
           test -f "$parent/packages/eit_design_system_flutter/pubspec.yaml" && echo "✅ external package ready"
-      
+      # 3) Just checking the dependency path is correct 
       - name: Check relative path
         run: |
           echo "Current directory: $(pwd)"
           test -f ../packages/eit_design_system_flutter/pubspec.yaml && echo "✅ Found package"
-      # 2) Invoke your composite Action
+      # 4) Invoke your composite Action
       - name: Run brandOptics AI review
         uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
         with:
