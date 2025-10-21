@@ -8,7 +8,7 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 
 ## 🔖 Current Version
 
-**v3.2.0** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
+**v3.3.4** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
 
 ---
 
@@ -50,7 +50,7 @@ jobs:
  
       # 2) Invoke your composite Action
       - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v3.2.0
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
         with:
           openai_key: ${{ secrets.OPENAI_API_KEY}}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -442,7 +442,7 @@ module.exports = [
 1. Navigate to your GitHub repository
 2. Go to **Settings** → **Secrets and variables** → **Actions**
 3. Click **New repository secret**
-4. Name: `OPENAI_API_KEY &  secrets.REVIEW_ENGINE_PAT `  REVIEW_ENGINE_PAT => is the organizaton developer key, which need to set 
+4. Name: `OPENAI_API_KEY & REVIEW_ENGINE_PAT `  REVIEW_ENGINE_PAT => is the organizaton developer key, which need to set 
 5. Value: Your OpenAI secret key
 
 ✅ `GITHUB_TOKEN` is auto-injected by GitHub.
