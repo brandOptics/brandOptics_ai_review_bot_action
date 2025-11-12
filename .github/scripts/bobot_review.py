@@ -376,13 +376,11 @@ md = []
 md.append(f'<img src="{img_url}" width="100" height="100" />')
 md.append('')
 # Title on its own line
-md.append('# brandOptics AI - Code Review ')
+md.append('# brandOptics AI - Code Review Report')
 md.append('')
 
 # Blank line between title and summary
-md.append("## Review Summary & Recommendations")
- 
-md.append(f"## Detected **{len(issues)} issue(s)** across **{len(file_groups)} file(s)** in this Pull Request.")
+md.append(f"## 🔍 Detected **{len(issues)} issue(s)** across **{len(file_groups)} file(s)** in this Pull Request")
 md.append("")
 
 md.append(f"> 🧑‍💻 **Developer Performance Insight for @{dev_name}**")
@@ -392,7 +390,6 @@ for line in rating.splitlines():
 md.append("---")
 md.append("### Pull Request Overview")
 md.append("")
-md.append("| Detail               | Value                                                 |")
 md.append("|:---------------------|:------------------------------------------------------|")
 md.append(f"| **Title** | {title}                                               |")
 md.append(f"| **PR Link** | [#{pr_number}]({url})                                  |")
@@ -412,17 +409,17 @@ md.append("---")
 md.append(dedent("""
 Thank you for your contribution! A few adjustments are recommended before this Pull Request can be merged.
 
-🔍 **Key Areas for Refinement:**
+**Key Areas for Refinement:**
 1.  **Errors & Warnings:** Please address any compilation errors or linting violations identified.
 2.  **Code Consistency:** Ensure naming conventions, formatting, and coding styles align with project standards.
 3.  **Clarity & Readability:** Simplify complex logic, remove redundant code, and add concise comments where necessary.
 4.  **Performance & Security:** Optimize critical code paths and validate all inputs to prevent vulnerabilities.
 5.  **Tests & Documentation:** Update existing tests or add new ones for changes in logic, and refresh any relevant documentation.
 
-💡 **Best Practice Tip:**
+**Best Practice Tip:**
 Consider breaking down large functions or complex changes into smaller, single-purpose units. This improves readability, simplifies testing, and makes future maintenance more manageable.
 
-Once these suggestions are addressed and you push a new commit, I will automatically re-review and provide an updated assessment. 🚀
+Once these suggestions are addressed and you push a new commit, I will automatically re-review and provide an updated assessment.
 """))
 md.append('')
 # Blank line to separate from the rest of the content
@@ -454,7 +451,7 @@ for line in troll.splitlines():
     md.append(f"> {line}")                # each line must also start with '>'
 md.append('') # Add a blank line after the troll section
 
-md.append('## 📂 Detailed Issue Breakdown & AI Suggestions')
+md.append('## 🧠 Detailed Issue Breakdown & AI Suggestions')
 md.append('')
 
 # List of files in the PR to retrieve patches
@@ -464,7 +461,7 @@ pr_files = {f.filename: f.patch for f in pr.get_files() if f.patch}
 for file_path, file_issues in sorted(file_groups.items()):
     md.append(f"### File: `{file_path}`")
     md.append('')
-    md.append('| Line No. | Issue / Error Message          | Suggested Fix (Summary)          |')
+    md.append('| Line     | Issue / Error Message          | Suggested Fix (Summary)          |')
     md.append('|:--------:|:-------------------------------|:---------------------------------|')
 
     patch = pr_files.get(file_path, '') # Get the patch for the current file
@@ -532,8 +529,8 @@ for file_path, file_issues in sorted(file_groups.items()):
     if details_for_file:
         for detail in details_for_file:
             md.append('<details>')
-            md.append(f'<summary><strong>🪄 Line {detail["line"]} – Detailed AI Insights ---------------------------------</strong> (click to expand)</summary>')
-            md.append('')
+            md.append(f'<summary><strong>🪶 Line {detail["line"]} – Detailed AI Insights -----------------------------------------------</strong> (click to expand)</summary>')
+            md.append("")
             md.append(f'**Analysis:**\n{detail["analysis"]}')
             md.append('')
             # Directly append the full_fix content. It is expected to contain the code block within it.
@@ -556,9 +553,8 @@ if not issues:
     md.append(f'Congratulations, @{dev_name}! Your Pull Request has successfully passed all automated code quality checks. Your code is clean, adheres to best practices, and is optimized for performance. 🚀')
     md.append('')
     md.append("---")
-    md.append("### 📝 Pull Request Overview")
+    md.append("### Pull Request Overview")
     md.append("")
-    md.append("| Detail               | Value                                                 |")
     md.append("|:---------------------|:------------------------------------------------------|")
     md.append(f"| **Title** | {title}                                               |")
     md.append(f"| **PR Link** | [#{pr_number}]({url})                                  |")

@@ -8,7 +8,7 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 
 ## 🔖 Current Version
 
-**v3.0.7** – Full support for Flutter & React. Angular and .NET support is in progress.
+**v3.3.4** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
 
 ---
 
@@ -17,45 +17,105 @@ The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assiste
 1. [Usage in CI/CD](#usage-in-cicd)
 2. [Flutter Setup](#flutter-setup)
 3. [React Setup](#react-setup)
-4. [Secrets Configuration](#secrets-configuration)
-5. [Supported Languages](#supported-languages)
-6. [Roadmap](#roadmap)
+4. [Node Setup](#node-setup)
+5. [Secrets Configuration](#secrets-configuration)
+6. [Supported Languages](#supported-languages)
+7. [Roadmap](#roadmap)
 
 ---
 
-## 🚀 Usage in CI/CD
+## Usage in CI/CD
 
 Create `.github/workflows/ci.yml` in your project repository:
 
 ```yaml
-title: brandOptics AI Neural Nexus Code Review
-
+name: "brandOptics AI Neural Nexus Code Review"
+ 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-
+ 
 permissions:
   contents: read
   pull-requests: write
   statuses: write
-
+ 
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
+      # 1) Always checkout first
       - name: Checkout code
         uses: actions/checkout@v4
-
+ 
+      # 2) Invoke your composite Action
       - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v3.0.7
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
         with:
-          openai_key:   ${{ secrets.OPENAI_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}  # Automatically provided
+          openai_key: ${{ secrets.OPENAI_API_KEY}}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ---
 
-## 🧪 Flutter Setup
+## Flutter Setup
+
+Create `.github/workflows/ci.yml` in your project repository:
+When working with multiple repository dependencies (such as packages), they must be cloned into the appropriate folder structure using the steps outlined below.
+
+```yaml
+name: "brandOptics AI Neural Nexus Code Review"
+ 
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+ 
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+ 
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      # 1) Always checkout first
+      - name: Checkout code
+        uses: actions/checkout@v4
+      # 2) Clone dependencies repos 
+      - name: Clone eit_design_system_flutter outside workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent="$(dirname "$GITHUB_WORKSPACE")"   # /home/runner/work/retail-flutter
+          mkdir -p "$parent/packages"
+
+          # mark safe for any git ops
+          git config --global --add safe.directory "$parent/packages/eit_design_system_flutter" || true
+
+          # clone the private repo with PAT
+          git clone \
+            --depth 1 \
+            --branch retail_app_ceramic_pot \
+            "https://x-access-token:${{ secrets.REVIEW_ENGINE_PAT }}@github.com/brandOptics/eit_design_system_flutter.git" \
+            "$parent/packages/eit_design_system_flutter"
+
+          # sanity check
+          test -f "$parent/packages/eit_design_system_flutter/pubspec.yaml" && echo "✅ external package ready"
+      # 3) Just checking the dependency path is correct 
+      - name: Check relative path
+        run: |
+          echo "Current directory: $(pwd)"
+          test -f ../packages/eit_design_system_flutter/pubspec.yaml && echo "✅ Found package"
+      # 4) Invoke your composite Action
+      - name: Run brandOptics AI review
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
+        with:
+          openai_key: ${{ secrets.OPENAI_API_KEY}}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+
 
 Add the following `analysis_options.yaml` file to the root of your Flutter project (next to `pubspec.yaml`).
 
@@ -216,7 +276,7 @@ linter:
 
 ---
 
-## ⚛️ React Setup
+## React Setup
 
 Create `eslint.config.js` at your project root:
 
@@ -280,23 +340,117 @@ export default [
 
 ---
 
-## 🔐 Secrets Configuration
 
-### ✅ Required: `OPENAI_API_KEY`
+
+
+> 💡 **Note:** You may comment out rules that aren't applicable to your project.
+
+---
+
+## Node Setup
+
+Create `eslint.config.js` at your project root:
+
+```js
+/* eslint-env node */
+/* global require, module */
+
+// eslint.config.js
+const js = require("@eslint/js");
+const globals = require("globals");
+const importPlugin = require("eslint-plugin-import");
+const sonarjs = require("eslint-plugin-sonarjs");
+const n = require("eslint-plugin-n");
+
+module.exports = [
+  { ignores: ["dist", "build", "node_modules"] },
+
+  // Treat ESLint config files as CommonJS and don't flag require/module.
+  {
+    files: [
+      "eslint.config.cjs",
+      "eslint.config.js",
+      ".eslintrc.cjs",
+      ".eslintrc.js",
+    ],
+    languageOptions: {
+      parserOptions: { sourceType: "script" }, // CommonJS
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+        require: "true",
+        module: "true",
+      },
+    },
+    rules: {
+      "no-undef": "off",
+      "n/no-unpublished-import": "off",
+      "n/no-unpublished-require": "off",
+    },
+  },
+
+  {
+    files: ["**/*.{js,mjs,cjs,ts}"],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: { ecmaVersion: "latest", sourceType: "module" },
+    },
+    plugins: { import: importPlugin, sonarjs, n },
+    settings: {
+      "import/resolver": {
+        node: { extensions: [".js", ".cjs", ".mjs", ".ts", ".json"] },
+      },
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      ...n.configs["flat/recommended"].rules,
+      ...importPlugin.configs.recommended.rules,
+      ...sonarjs.configs.recommended.rules,
+
+      "no-undef": "error",
+      "no-unused-vars": [
+        "error",
+        {
+          args: "after-used",
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^[A-Z_]",
+        },
+      ],
+      eqeqeq: ["error", "always"],
+      "no-console": "warn",
+      "no-debugger": "error",
+      "no-var": "error",
+      "prefer-const": "error",
+      "n/no-missing-import": "error",
+      "n/no-unsupported-features/es-builtins": "off",
+      "n/no-unsupported-features/node-builtins": "off",
+    },
+  },
+];
+
+ 
+
+```
+
+---
+
+## Secrets Configuration
+
+### Required: `OPENAI_API_KEY`
 
 #### To set:
 
 1. Navigate to your GitHub repository
 2. Go to **Settings** → **Secrets and variables** → **Actions**
 3. Click **New repository secret**
-4. Name: `OPENAI_API_KEY`
+4. Name: `OPENAI_API_KEY & REVIEW_ENGINE_PAT `  REVIEW_ENGINE_PAT => is the organizaton developer key, which need to set 
 5. Value: Your OpenAI secret key
 
 ✅ `GITHUB_TOKEN` is auto-injected by GitHub.
 
 ---
 
-## 🧠 Supported Languages
+## Supported Languages
 
 | Language | Status           |
 | -------- | ---------------- |
@@ -305,10 +459,11 @@ export default [
 | Angular  | 🚧 In Progress   |
 | .NET     | 🚧 In Progress   |
 | Python   | ✅ Basic (Flake8) |
+| Node   | ✅ Stable|
 
 ---
 
-## 🛣️ Roadmap
+## Roadmap
 
 * ✅ Improve feedback formatting
 * 🚧 Angular support (TypeScript / HTML)
