@@ -569,7 +569,7 @@ if not issues:
     md.append("<details>")
     md.append("<summary>Click to expand</summary>\n")
     md.append("\n".join(f"- `{file}`" for file in changed_files_list))
-    md.append("\n</details>") ")
+    md.append("\n</details>")
     md.append("---")
     md.append("### 🏅 Developer Performance Rating")
     md.append("")
