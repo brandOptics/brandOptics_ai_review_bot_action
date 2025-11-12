@@ -403,7 +403,7 @@ md.append(f"| **Lines Removed** | {deletions}                                   
 md.append(f"| **Files Changed** | {len(changed_files_list)} |")
 md.append("| --- | --- |")
 md.append("<details>")
-md.append("<summary>Click to expand</summary>\n")
+md.append("<summary>Files Changed ----------------Click to expand</summary>\n")
 md.append("\n".join(f"- `{file}`" for file in changed_files_list))
 md.append("\n</details>")
 md.append("---")
@@ -569,10 +569,11 @@ if not issues:
     md.append(f"| **Files Changed** | {len(changed_files_list)} |")
     md.append("| --- | --- |")
     md.append("<details>")
-    md.append("<summary>Click to expand</summary>\n")
+    md.append("<summary>Files Changed ----------------Click to expand</summary>\n")
     md.append("\n".join(f"- `{file}`" for file in changed_files_list))
     md.append("\n</details>")
-    md.append("---")
+    
+    md.append("")
     md.append("### 🏅 Developer Performance Rating")
     md.append("")
     md.append(">") # Start the blockquote
