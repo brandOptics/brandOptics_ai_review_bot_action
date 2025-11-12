@@ -399,7 +399,12 @@ md.append(f"| **Opened On** | {formatted_created_at}                            
 md.append(f"| **Commits** | {commits}                                             |")
 md.append(f"| **Lines Added** | {additions}                                           |")
 md.append(f"| **Lines Removed** | {deletions}                                           |")
-md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
+md.append(f"| **Files Changed** | {len(changed_files_list)} |")
+md.append("| --- | --- |")
+md.append("<details>")
+md.append("<summary>Click to expand</summary>\n")
+md.append("\n".join(f"- `{file}`" for file in changed_files_list))
+md.append("\n</details>")
 md.append("---")
 md.append(dedent("""
 Thank you for your contribution! A few adjustments are recommended before this Pull Request can be merged.
@@ -559,7 +564,12 @@ if not issues:
     md.append(f"| **Commits** | {commits}                                             |")
     md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
     md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
-    md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
+    md.append(f"| **Files Changed** | {len(changed_files_list)} |")
+    md.append("| --- | --- |")
+    md.append("<details>")
+    md.append("<summary>Click to expand</summary>\n")
+    md.append("\n".join(f"- `{file}`" for file in changed_files_list))
+    md.append("\n</details>") |")
     md.append("---")
     md.append("### 🏅 Developer Performance Rating")
     md.append("")
