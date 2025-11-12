@@ -376,13 +376,13 @@ md = []
 md.append(f'<img src="{img_url}" width="100" height="100" />')
 md.append('')
 # Title on its own line
-md.append('# brandOptics AI Neural Nexus Review')
+md.append('# brandOptics AI - Code Review ')
 md.append('')
 
 # Blank line between title and summary
-md.append("## 📊 Review Summary & Recommendations")
-md.append("")
-md.append(f"Detected **{len(issues)} issue(s)** across **{len(file_groups)} file(s)** in this Pull Request.")
+md.append("## Review Summary & Recommendations")
+ 
+md.append(f"## Detected **{len(issues)} issue(s)** across **{len(file_groups)} file(s)** in this Pull Request.")
 md.append("")
 
 md.append(f"> 🧑‍💻 **Developer Performance Insight for @{dev_name}**")
@@ -390,7 +390,7 @@ for line in rating.splitlines():
     md.append(f"> {line}")
 
 md.append("---")
-md.append("### 📝 Pull Request Overview")
+md.append("### Pull Request Overview")
 md.append("")
 md.append("| Detail               | Value                                                 |")
 md.append("|:---------------------|:------------------------------------------------------|")
@@ -402,7 +402,12 @@ md.append(f"| **Opened On** | {formatted_created_at}                            
 md.append(f"| **Commits** | {commits}                                             |")
 md.append(f"| **Lines Added** | {additions}                                           |")
 md.append(f"| **Lines Removed** | {deletions}                                           |")
-md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
+md.append(f"| **Files Changed** | {len(changed_files_list)} |")
+md.append("| --- | --- |")
+md.append("<details>")
+md.append("<summary>Click to expand</summary>\n")
+md.append("\n".join(f"- `{file}`" for file in changed_files_list))
+md.append("\n</details>")
 md.append("---")
 md.append(dedent("""
 Thank you for your contribution! A few adjustments are recommended before this Pull Request can be merged.
@@ -527,7 +532,7 @@ for file_path, file_issues in sorted(file_groups.items()):
     if details_for_file:
         for detail in details_for_file:
             md.append('<details>')
-            md.append(f'<summary><strong>⚙️ Line {detail["line"]} – Detailed AI Insights ---------------------------------</strong> (click to expand)</summary>')
+            md.append(f'<summary><strong>🪄 Line {detail["line"]} – Detailed AI Insights ---------------------------------</strong> (click to expand)</summary>')
             md.append('')
             md.append(f'**Analysis:**\n{detail["analysis"]}')
             md.append('')
@@ -546,7 +551,7 @@ if not issues:
     md.clear() # Clear existing content if no issues were found
     md.append(f'<img src="{img_url}" width="100" height="100" />')
     md.append('')
-    md.append('# brandOptics AI Neural Nexus Review: All Clear! ✨')
+    md.append('# brandOptics AI - Code Review: All Clear! ✨')
     md.append('')
     md.append(f'Congratulations, @{dev_name}! Your Pull Request has successfully passed all automated code quality checks. Your code is clean, adheres to best practices, and is optimized for performance. 🚀')
     md.append('')
@@ -563,7 +568,12 @@ if not issues:
     md.append(f"| **Commits** | {commits}                                             |")
     md.append(f"| **Lines Added** | <span style='color:green;'>+{additions}</span>         |") # Added inline styling
     md.append(f"| **Lines Removed** | <span style='color:red;'>-{deletions}</span>           |") # Added inline styling
-    md.append(f"| **Files Changed** | {len(changed_files_list)} (`{'`, `'.join(changed_files_list)}`) |")
+    md.append(f"| **Files Changed** | {len(changed_files_list)} |")
+    md.append("| --- | --- |")
+    md.append("<details>")
+    md.append("<summary>Click to expand</summary>\n")
+    md.append("\n".join(f"- `{file}`" for file in changed_files_list))
+    md.append("\n</details>") |")
     md.append("---")
     md.append("### 🏅 Developer Performance Rating")
     md.append("")
