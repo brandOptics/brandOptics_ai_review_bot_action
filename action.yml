@@ -27,12 +27,16 @@ runs:
         if [ -n "${pkg:-}" ]; then root="$(dirname "$pkg")"; else root="."; fi
         echo "PROJECT_ROOT=$root" >> "$GITHUB_ENV"
 
-        HAS_NODE=false; HAS_REACT=false; HAS_ANGULAR=false; HAS_PY=false; HAS_DOTNET=false; HAS_FLUTTER=false
+        if [ -n "${pkg:-}" ]; then root="$(dirname "$pkg")"; else root="."; fi
+        echo "PROJECT_ROOT=$root" >> "$GITHUB_ENV"
+
+        HAS_NODE=false; HAS_REACT=false; HAS_ANGULAR=false; HAS_VUE=false; HAS_PY=false; HAS_DOTNET=false; HAS_FLUTTER=false
 
         if [ -n "$(find . -type f \( -name 'package.json' -o -name 'package-lock.json' -o -name 'yarn.lock' -o -name 'pnpm-lock.yaml' \) -not -path '*/node_modules/*' -print -quit)" ]; then HAS_NODE=true; fi
         if [ -f "$root/package.json" ]; then
           if grep -q '"react"[[:space:]]*:' "$root/package.json"; then HAS_REACT=true; fi
           if grep -q '"@angular/core"[[:space:]]*:' "$root/package.json"; then HAS_ANGULAR=true; fi
+          if grep -q '"vue"[[:space:]]*:' "$root/package.json"; then HAS_VUE=true; fi
         fi
         if [ -n "$(find "$root" -type f -name '*.py' -print -quit)" ]; then HAS_PY=true; fi
         if [ -n "$(find "$root" -type f -name '*.sln' -print -quit)" ]; then HAS_DOTNET=true; fi
@@ -42,9 +46,18 @@ runs:
           echo "HAS_NODE=$HAS_NODE"
           echo "HAS_REACT=$HAS_REACT"
           echo "HAS_ANGULAR=$HAS_ANGULAR"
+          echo "HAS_VUE=$HAS_VUE"
           echo "HAS_PY=$HAS_PY"
           echo "HAS_DOTNET=$HAS_DOTNET"
           echo "HAS_FLUTTER=$HAS_FLUTTER"
+          
+          # New Detection
+          HAS_SQL=false; HAS_HTMLWEB=false
+          if [ -n "$(find "$root" -type f -name '*.sql' -print -quit)" ]; then HAS_SQL=true; fi
+          if [ -n "$(find "$root" -type f \( -name '*.html' -o -name '*.css' -o -name '*.scss' \) -print -quit)" ]; then HAS_HTMLWEB=true; fi
+          
+          echo "HAS_SQL=$HAS_SQL" >> "$GITHUB_ENV"
+          echo "HAS_HTMLWEB=$HAS_HTMLWEB" >> "$GITHUB_ENV"
         } >> "$GITHUB_ENV"
 
     - name: Prepare reports directory
@@ -64,7 +77,7 @@ runs:
         key: pip-${{ runner.os }}-3x
 
     - name: Setup Node.js
-      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
+      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' || env.HAS_VUE == 'true' }}
       uses: actions/setup-node@v4
       with:
         node-version: "18"
@@ -75,7 +88,7 @@ runs:
           ${{ env.PROJECT_ROOT }}/pnpm-lock.yaml
 
     - name: Cache node_modules (fallback)
-      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' }}
+      if: ${{ env.HAS_NODE == 'true' || env.HAS_REACT == 'true' || env.HAS_ANGULAR == 'true' || env.HAS_VUE == 'true' }}
       uses: actions/cache@v4
       with:
         path: |
@@ -259,6 +272,47 @@ runs:
           echo "🛡️ Skipping Angular linting."
         fi
 
+    # ---------- Lint: Vue.js ----------
+    - name: Lint Vue.js
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_VUE}" = "true" ]; then
+          echo "🟩 Linting Vue.js in $PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+          
+          # Install deps if not present
+          npm install --no-save \
+            eslint @eslint/js eslint-plugin-vue @babel/eslint-parser \
+            >/dev/null 2>&1 || true
+
+          # Create temp config if needed
+          if [ ! -f "eslint.config.js" ] && [ ! -f ".eslintrc.js" ] && [ ! -f ".eslintrc.json" ]; then
+             tmpcfg="$PROJECT_ROOT/.tmp.eslint.vue.config.mjs"
+             cat > "$tmpcfg" <<'EOF'
+        const vue = (await import("eslint-plugin-vue")).default;
+        export default [
+          ...vue.configs["flat/recommended"],
+          {
+            rules: {
+              "vue/multi-word-component-names": "off"
+            }
+          }
+        ];
+        EOF
+             npx eslint . --ext .vue,.js,.jsx,.ts,.tsx \
+               --config "$tmpcfg" \
+               --format json \
+               --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+          else
+             npx eslint . --ext .vue,.js,.jsx,.ts,.tsx \
+               --format json \
+               --output-file "$GITHUB_WORKSPACE/.github/linter-reports/eslint.json" || true
+          fi
+        else
+          echo "🟩 Skipping Vue.js linting."
+        fi
+
     # ---------- Lint: Generic Node ----------
     - name: Lint Node/JS/TS (generic)
       shell: bash
@@ -362,6 +416,57 @@ runs:
           dart analyze --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/dartanalyzer.json" || true
         else
           echo "🪶 Skipping Flutter analysis."
+        fi
+
+    # ---------- Lint: SQL (SQLFluff) ----------
+    - name: Lint SQL
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_SQL}" = "true" ]; then
+          echo "🗄️ Linting SQL in $PROJECT_ROOT"
+          python -m pip install --upgrade pip >/dev/null 2>&1 || true
+          pip install sqlfluff >/dev/null 2>&1 || true
+          cd "$PROJECT_ROOT"
+          # Only run if .sql files exist
+          if [ -n "$(find . -type f -name '*.sql' -print -quit)" ]; then
+             # dialect=ansi is a safe default; user can override via .sqlfluff file
+            sqlfluff lint . --format json --nojitter > "$GITHUB_WORKSPACE/.github/linter-reports/sqlfluff.json" || true
+          fi
+        else
+          echo "🗄️ Skipping SQL linting."
+        fi
+
+    # ---------- Lint: HTML & CSS (HTMLHint + Stylelint) ----------
+    - name: Lint HTML/CSS
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${HAS_HTMLWEB}" = "true" ]; then
+          echo "🌐 Linting HTML/CSS in $PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+          
+          # Check for package.json to avoid polluting root if unnecessary, 
+          # but we need npx so we assume node environment or use temp installation
+          npm install --no-save htmlhint stylelint stylelint-config-standard >/dev/null 2>&1 || true
+          
+          # HTMLHint
+          if [ -n "$(find . -type f -name '*.html' -print -quit)" ]; then
+            npx htmlhint "**/*.html" --format=json > "$GITHUB_WORKSPACE/.github/linter-reports/htmlhint.json" || true
+          fi
+          
+          # Stylelint
+          if [ -n "$(find . -type f \( -name '*.css' -o -name '*.scss' \) -print -quit)" ]; then
+             # Create temp config if none exists
+             if [ ! -f ".stylelintrc" ] && [ ! -f ".stylelintrc.json" ]; then
+               echo '{ "extends": "stylelint-config-standard" }' > .tmp.stylelintrc.json
+               npx stylelint "**/*.{css,scss}" --config .tmp.stylelintrc.json --formatter json > "$GITHUB_WORKSPACE/.github/linter-reports/stylelint.json" || true
+             else
+               npx stylelint "**/*.{css,scss}" --formatter json > "$GITHUB_WORKSPACE/.github/linter-reports/stylelint.json" || true
+             fi
+          fi
+        else
+          echo "🌐 Skipping HTML/CSS linting."
         fi
 
     # ---------- AI Review ----------
