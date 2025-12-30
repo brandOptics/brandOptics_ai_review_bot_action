@@ -287,10 +287,11 @@ def analyze_code_chunk(filename, patch_content):
         f"Analyze the following code changes for file: `{filename}`\\n\\n"
         "**Goal:** Identify critical issues, code smells, and security hotspots.\\n\\n"
         "**CRITICAL RULES:**\\n"
-        "1. Do NOT report issues for named constants (e.g., dateUtils.format_21). Assume they are safe.\\n"
-        "   HOWEVER, DO report explicit hardcoded strings/numbers in args (e.g., Text('Save Call') -> I18n issue).\\n"
-        "2. Do NOT report 'commented out code' unless it is clearly dead logic. Ignore comments that look like explanations.\\n"
-        "3. Use the EXACT line number from the provided diff. Do NOT guess.\\n\\n"
+        "1. **Line Numbers:** The input is formatted as `Line: Code`. You MUST return the EXACT line number provided.\\n"
+        "2. **Constants:** `Class.Property` or `ENUM.VAL` are SAFE. Do NOT flag as hardcoded strings/URLs.\\n"
+        "3. **Empty Catch:** If a catch block contains `return`, `throw`, or `log`, it is HANDLED. Do NOT flag as empty.\\n"
+        "4. **Hardcoded Strings:** ONLY flag explicit literals like `Text('Hello')`. Ignore `const` variables.\\n"
+        "5. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n\\n"
         "**Focus Areas (SonarWay):**\\n"
         "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
         "2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).\\n"
@@ -309,8 +310,8 @@ def analyze_code_chunk(filename, patch_content):
         "   - **Error Handling:** Flag empty catch blocks or swallowed errors.\\n"
         "   - **SOLID:** Flag God Classes (SRP violation) or Tight Coupling.\\n"
         "   - **DRY:** Flag duplicated logic blocks.\\n\\n"
-        "**Input:**\\n"
-        "```diff\\n"
+        "**Input (Line: Code):**\\n"
+        "```text\\n"
         f"{patch_content}\\n"
         "```\\n\\n"
         "**Response Format (JSON only):**\\n"
@@ -368,13 +369,17 @@ for fname, patch in patches.items():
     if any(fname.endswith(ext) for ext in ['.png', '.jpg', '.lock', '.json']):
         continue
 
-    # Identify changed lines to validate AI suggestions
+    # Identifiy changed lines (used for validation AND context)
     changed_lines = parse_patch_lines(patch)
     if not changed_lines:
         continue
 
+    # Format patch with line numbers for AI Context (Fixes hallucinated line numbers)
+    # Example: "102: final String url = '...';"
+    patch_with_lines = "\n".join([f"{ln}: {txt}" for ln, txt in changed_lines])
+
     # Get AI Feedback
-    ai_feedback = analyze_code_chunk(fname, patch)
+    ai_feedback = analyze_code_chunk(fname, patch_with_lines)
     
     for item in ai_feedback:
         # Enrich with filename
@@ -554,7 +559,7 @@ if all_issues:
                     original_blk = f"**Original Code:**\n```{fence}\n{i['original_code']}\n```\n\n"
                 
                 md.append("\n<details>")
-                md.append(f"<summary><b>v Line {i['line']}: {i['message']}</b></summary>") 
+                md.append(f"<summary><b>Line {i['line']}: {i['message']}</b></summary>") 
                 md.append("<br>\n")
                 md.append(f"**Why it matters:**\n{i['analysis']}\n")
                 
