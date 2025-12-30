@@ -609,10 +609,13 @@ except Exception as e:
     print(final_body)
 
 # --- 9) EXIT CODE (BLOCK MERGE) ------------------------------------------
-# Ensure the Action itself fails if the check failed.
+# Soft Fail: We have already flagged the PR as "failure" in step 8 using create_status.
+# We do NOT want to fail the Action Runner itself (sys.exit(1)) because that looks like a bot crash.
+# Instead, we exit(0) so the Action completes "Successfully" (i.e. it successfully found the bugs).
 if all_issues:
-    print(f"\n[BLOCKING] Strict Policy: Found {len(all_issues)} issues. Fix them to proceed.")
-    sys.exit(1)
+    print(f"\n[INFO] Strict Policy Enforced: Found {len(all_issues)} issues. PR Status set to 'Failure'.")
+    print("[INFO] Action run completed successfully (Merge blocked via Status Check).")
+    sys.exit(0)
 else:
     print("\n[SUCCESS] QA PASSED. No issues found.")
     sys.exit(0)
