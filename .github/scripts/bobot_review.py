@@ -442,13 +442,15 @@ md = []
 # 7a) HEADER & HUD (Executive V2: Hero Rating + Badge Row)
 # Construct Badge URLs for the row
 # Badge format: https://img.shields.io/badge/Label-Value-Color?style=flat-square
-badge_author = f"https://img.shields.io/badge/Author-@{pr.user.login}-1f2937?style=flat-square&logo=github"
-badge_files = f"https://img.shields.io/badge/Files-{pr.changed_files}_Changed-1f2937?style=flat-square"
 
-# Helper for row badges (simpler than the table one)
-def get_row_badge(label, count, color="red"):
-    if count == 0: return "" # Hide if 0? Or show Green? Let's show clean stats.
-    return f"https://img.shields.io/badge/{label}-{count}-{color}?style=flat-square"
+def safe_badge_str(s):
+    return str(s).replace("-", "--").replace("_", "__").replace(" ", "_")
+
+author_safe = safe_badge_str(f"@{pr.user.login}")
+files_safe = safe_badge_str(f"{pr.changed_files} Changed")
+
+badge_author = f"https://img.shields.io/badge/Author-{author_safe}-1f2937?style=flat-square&logo=github"
+badge_files = f"https://img.shields.io/badge/Files-{files_safe}-1f2937?style=flat-square"
 
 # Generate badges
 b_sec = get_badge('Security', security_count, 'blue', 'orange').replace('style=for-the-badge', 'style=flat-square') 
@@ -461,7 +463,7 @@ md.append("  <h2>BrandOptics Neural Nexus</h2>")
 md.append(f"  <h3>{stars} {hero_title}</h3>")
 md.append("  <p><i>'Automated Code Intelligence v3.0'</i></p>")
 md.append(f"  <p>\n    <img src='{badge_author}' />\n    <img src='{badge_files}' />")
-md.append(f"    {b_sec}\n    {b_perf}\n    {b_qual}\n  </p>\n</div>\n")
+md.append(f"    <img src='{b_sec}' />\n    <img src='{b_perf}' />\n    <img src='{b_qual}' />\n  </p>\n</div>\n")
 md.append("\n---\n")
 
 # 7b) PR OVERVIEW (From "Old" Bot - Clean Summary)
