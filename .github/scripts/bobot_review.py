@@ -250,6 +250,29 @@ def collect_linter_issues(changed_files):
 
     return issues
 
+
+def enrich_linter_issues(issues, patches):
+    """
+    Attempts to add 'original_code' to linter issues by looking up the line in the patch.
+    """
+    # Parse all patches once to map File -> {Line -> Code}
+    file_map = {}
+    for fname, patch_text in patches.items():
+        pairs = parse_patch_lines(patch_text) # Returns [(line, txt)]
+        file_map[fname] = {p[0]: p[1] for p in pairs}
+
+    for i in issues:
+        # If it's a linter issue (no original_code) and we have the file
+        if not i.get('original_code') and i['file'] in file_map:
+            line_code = file_map[i['file']].get(i['line'])
+            if line_code:
+                i['original_code'] = line_code.strip()
+                # If suggestion is generic, make it slightly better
+                if i.get('suggestion') in ["Fix analysis issue.", "Fix lint violation.", "Fix PEP8 violation."]:
+                    i['suggestion'] = f"// Fix violation at line {i['line']}: {i['message']}"
+
+    return issues
+
 def deduplicate_issues(issues):
     """
     Removes duplicates based on File + Line + Message.
@@ -386,6 +409,9 @@ for fname, patch in patches.items():
         item['file'] = fname
         all_issues.append(item)
 
+# Helper: Enrich linter issues with code context if available in patch
+all_issues = enrich_linter_issues(all_issues, patches)
+
 # Deduplicate to remove redundant linter/AI overlap
 all_issues = deduplicate_issues(all_issues)
 
@@ -494,7 +520,7 @@ if top_issues:
     md.append("### :rotating_light: Critical Focus\n*Immediate attention required.*")
     for i in top_issues:
         fence = get_language_fence(i['file'])
-        md.append(f"> **:red_circle: {i['message']}** in `{i['file']}`\n>")
+        md.append(f"> **:red_circle: {i['message']}** in `{i['file']}` at Line {i['line']}\n>")
         md.append(f"> **Analysis:** {i['analysis']}")
         md.append(f"> ```{fence}")
         md.append(f"> {i['suggestion']}")
