@@ -278,14 +278,15 @@ def analyze_code_chunk(filename, patch_content):
             "type": "Security" | "Performance" | "Standards",
             "severity": "High" | "Medium" | "Low",
             "message": "<short_title_like_Sonar_Rule>",
-            "analysis": "<detailed_explanation_referencing_cognitive_complexity_or_clean_code>",
-            "suggestion": "<code_snippet_fix_or_refactor_recommendation>"
+            "analysis": "<detailed_explanation>",
+            "original_code": "<the_problematic_code_snippet_from_diff>",
+            "suggestion": "<multi_line_fixed_code_block>"
         }},
         ...
     ]
     
     If no significant issues, return [].
-    Do not hallucinate line numbers outside the diff.
+    Ensure 'suggestion' uses proper newlines (\n) for readability. Do not flatten code.
     """)
 
     try:
@@ -350,16 +351,19 @@ linter_error_count = sum(1 for i in linter_issues if i['severity'] == 'High')
 
 # Calculate "Scores" for badges
 def get_badge(label, count, color_good="success", color_bad="critical"):
+    # Use flat-square for cleaner look, less prone to rendering issues
+    # Replace spaces with underscores or %20 if needed, but shields.io handles dashes better
+    safe_label = label.replace(" ", "_")
     if count == 0:
-        return f"https://img.shields.io/badge/{label}-A--Perfect-{color_good}?style=for-the-badge"
+        return f"https://img.shields.io/badge/{safe_label}-A--Perfect-{color_good}?style=flat-square&logo=github"
     elif count < 3:
-        return f"https://img.shields.io/badge/{label}-B--Warnings-yellow?style=for-the-badge"
+        return f"https://img.shields.io/badge/{safe_label}-B--Warnings-yellow?style=flat-square&logo=github"
     else:
-        return f"https://img.shields.io/badge/{label}-C--Critical-{color_bad}?style=for-the-badge"
+        return f"https://img.shields.io/badge/{safe_label}-C--Critical-{color_bad}?style=flat-square&logo=github"
 
 badge_sec = get_badge("Security", security_count, "blue", "red")
 badge_perf = get_badge("Performance", perf_count, "green", "orange")
-badge_qual = get_badge("Code_Quality", standards_count, "success", "yellow")
+badge_qual = get_badge("Code_Quality", standards_count, "success", "yellow") # Underscore ensures correct rendering
 
 # Developer Rating Generation
 rating_prompt = dedent(f"""
@@ -372,6 +376,7 @@ Rate this PR based on stats:
 Output specifically:
 1. Star Rating (1-5 stars icons)
 2. A Creative "Hero Title" (e.g., Code Ninja, Bug Slayer, Spaghetti Chef)
+""")
 Separated by a pipe symbol `|`.
 """)
 try:
@@ -511,6 +516,10 @@ if all_issues:
             
             for i in rich_issues:
                 fence = get_language_fence(filename)
+                original_blk = ""
+                if i.get('original_code'):
+                    original_blk = f"**Original Code:**\n```{fence}\n{i['original_code']}\n```\n\n"
+                
                 md.append(f"""
 <details>
 <summary><b>▼ Line {i['line']}: {i['message']}</b></summary> 
@@ -519,7 +528,7 @@ if all_issues:
 **Why it matters:**
 {i['analysis']}
 
-**Suggested Fix:**
+{original_blk}**Suggested Fix:**
 ```{fence}
 {i['suggestion']}
 ```
