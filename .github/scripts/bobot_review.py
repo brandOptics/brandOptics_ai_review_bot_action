@@ -287,13 +287,28 @@ def analyze_code_chunk(filename, patch_content):
         f"Analyze the following code changes for file: `{filename}`\\n\\n"
         "**Goal:** Identify critical issues, code smells, and security hotspots.\\n\\n"
         "**CRITICAL RULES:**\\n"
-        "1. Do NOT report issues for named constants or utility functions (e.g., dateUtils.format_21). Assume they are valid.\\n"
+        "1. Do NOT report issues for named constants (e.g., dateUtils.format_21). Assume they are safe.\\n"
+        "   HOWEVER, DO report explicit hardcoded strings/numbers in args (e.g., Text('Save Call') -> I18n issue).\\n"
         "2. Do NOT report 'commented out code' unless it is clearly dead logic. Ignore comments that look like explanations.\\n"
         "3. Use the EXACT line number from the provided diff. Do NOT guess.\\n\\n"
         "**Focus Areas (SonarWay):**\\n"
         "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
         "2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).\\n"
         "3. [Maintainability] (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).\\n\\n"
+        "**STRICT STANDARDS TO ENFORCE:**\\n"
+        "A. **Hard Metrics:**\\n"
+        "   - Nesting Depth > 4 levels -> Suggest extraction.\\n"
+        "   - Function Params > 7 -> Suggest Parameter Object.\\n"
+        "   - Cyclomatic Complexity > 10 -> Suggest splitting.\\n\\n"
+        "B. **Naming & Style:**\\n"
+        "   - Variables/Methods: camelCase (JS/Java/Dart), snake_case (Python).\\n"
+        "   - Classes: PascalCase. Constants: UPPER_SNAKE_CASE.\\n"
+        "   - Booleans should have prefixes (is, has, should).\\n\\n"
+        "C. **Architecture & Logic:**\\n"
+        "   - **Fail Fast:** Flag deep if/else nesting; suggest Guard Clauses.\\n"
+        "   - **Error Handling:** Flag empty catch blocks or swallowed errors.\\n"
+        "   - **SOLID:** Flag God Classes (SRP violation) or Tight Coupling.\\n"
+        "   - **DRY:** Flag duplicated logic blocks.\\n\\n"
         "**Input:**\\n"
         "```diff\\n"
         f"{patch_content}\\n"
@@ -569,10 +584,14 @@ try:
     print(f"[SUCCESS] Posted Neural Nexus Review for PR #{pr_number}")
     
     # Set Status Check
-    # Fail if Security Issues > 0 OR Linter Errors > 0
-    # "Standards" warnings from AI do NOT cause failure (to prevent loops)
-    state = "failure" if (security_count > 0 or linter_error_count > 0) else "success"
-    desc = f"Found {len(all_issues)} issues." if all_issues else "All Clear! Neural Nexus approves."
+    # STRICT MODE: Fail if ANY issue exists (Security, Low/Med/High, Lint)
+    if all_issues:
+        state = "failure"
+        desc = f"Blocker: Found {len(all_issues)} issues. Strict policy enforced."
+    else:
+        state = "success"
+        desc = "All Clear! Neural Nexus approves."
+
     repo.get_commit(full_sha).create_status(
         context='brandOptics AI Neural Nexus',
         state=state,
@@ -583,11 +602,12 @@ except Exception as e:
     print(f"[ERROR] Failed to post comment: {e}")
     # Print for debug
     print(final_body)
+
 # --- 9) EXIT CODE (BLOCK MERGE) ------------------------------------------
 # Ensure the Action itself fails if the check failed.
-if (security_count > 0) or any(i.get("severity") == "High" for i in all_issues):
-    print("\n[BLOCKING] Critical Issues Found. Fix them to proceed.")
+if all_issues:
+    print(f"\n[BLOCKING] Strict Policy: Found {len(all_issues)} issues. Fix them to proceed.")
     sys.exit(1)
 else:
-    print("\n[SUCCESS] QA PASSED.")
+    print("\n[SUCCESS] QA PASSED. No issues found.")
     sys.exit(0)

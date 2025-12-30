@@ -1,4 +1,4 @@
-name: "brandOptics AI Neural Nexus Code Review"
+name: "brandOptics AI Neural Nexus"
 description: "Runs the brandOptics AI neural-intelligence engine against your PR."
 branding:
   icon: "zap"
