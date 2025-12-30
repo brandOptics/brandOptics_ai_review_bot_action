@@ -429,24 +429,14 @@ b_sec = get_badge('Security', security_count, 'blue', 'orange').replace('style=f
 b_perf = get_badge('Performance', perf_count).replace('style=for-the-badge', 'style=flat-square')
 b_qual = get_badge('Quality', linter_error_count + standards_count).replace('style=for-the-badge', 'style=flat-square')
 
-md.append(f"""<div align="center">
-  <img src="https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png" height="80" />
-  <h2>BrandOptics Neural Nexus</h2>
-  
-  <h3>{stars} {hero_title}</h3>
-  <p><i>"Automated Code Intelligence v3.0"</i></p>
-
-  <p>
-    <img src="{badge_author}" />
-    <img src="{badge_files}" />
-    {b_sec}
-    {b_perf}
-    {b_qual}
-  </p>
-</div>
-
----
-""")
+md.append(f"\n<div align='center'>")
+md.append(f"  <img src='https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png' height='80' />")
+md.append("  <h2>BrandOptics Neural Nexus</h2>")
+md.append(f"  <h3>{stars} {hero_title}</h3>")
+md.append("  <p><i>'Automated Code Intelligence v3.0'</i></p>")
+md.append(f"  <p>\n    <img src='{badge_author}' />\n    <img src='{badge_files}' />")
+md.append(f"    {b_sec}\n    {b_perf}\n    {b_qual}\n  </p>\n</div>\n")
+md.append("\n---\n")
 
 # 7b) PR OVERVIEW (From "Old" Bot - Clean Summary)
 # 7b) CRITICAL FOCUS (Immediate Attention)
@@ -456,14 +446,11 @@ if top_issues:
     md.append("### :rotating_light: Critical Focus\n*Immediate attention required.*")
     for i in top_issues:
         fence = get_language_fence(i['file'])
-        md.append(f"""
-> **:red_circle: {i['message']}** in `{i['file']}`
->
-> **Analysis:** {i['analysis']}
-> ```{fence}
-> {i['suggestion']}
-> ```
-""")
+        md.append(f"> **:red_circle: {i['message']}** in `{i['file']}`\n>")
+        md.append(f"> **Analysis:** {i['analysis']}")
+        md.append(f"> ```{fence}")
+        md.append(f"> {i['suggestion']}")
+        md.append("> ```\n")
     md.append("\n---\n")
 
 # 7c) Assessment (Only if clean)
