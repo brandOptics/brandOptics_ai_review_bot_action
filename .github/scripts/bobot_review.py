@@ -250,6 +250,32 @@ def collect_linter_issues(changed_files):
 
     return issues
 
+def deduplicate_issues(issues):
+    """
+    Removes duplicates based on File + Line + Message.
+    Prioritizes issues that have 'suggestion' (AI) over plain linter errors.
+    """
+    unique_map = {}
+    
+    for i in issues:
+        # Create a key. We normalize message to avoid case-sensitivity issues
+        key = (i['file'], i['line'], i['message'].strip().lower())
+        
+        existing = unique_map.get(key)
+        if existing:
+            # Conflict! Decide who stays.
+            # 1. Prefer the one with a 'suggestion' (AI rich content)
+            if i.get('suggestion') and not existing.get('suggestion'):
+                unique_map[key] = i
+            # 2. If both/neither have suggestion, prefer higher severity
+            # (Note: Logic assumes 'High' < 'Medium' in severity dict, but here we just check raw string)
+            elif i.get('severity') == 'High' and existing.get('severity') != 'High':
+                unique_map[key] = i
+        else:
+            unique_map[key] = i
+            
+    return list(unique_map.values())
+
 # --- 4) AI ANALYZER -----------------------------------------------------
 def analyze_code_chunk(filename, patch_content):
     """
@@ -260,6 +286,10 @@ def analyze_code_chunk(filename, patch_content):
         f"You are an Expert Code Reviewer and Static Analyzer aiming to enforce **SonarQube/SonarWay** Clean Code principles.\\n"
         f"Analyze the following code changes for file: `{filename}`\\n\\n"
         "**Goal:** Identify critical issues, code smells, and security hotspots.\\n\\n"
+        "**CRITICAL RULES:**\\n"
+        "1. Do NOT report issues for named constants or utility functions (e.g., dateUtils.format_21). Assume they are valid.\\n"
+        "2. Do NOT report 'commented out code' unless it is clearly dead logic. Ignore comments that look like explanations.\\n"
+        "3. Use the EXACT line number from the provided diff. Do NOT guess.\\n\\n"
         "**Focus Areas (SonarWay):**\\n"
         "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
         "2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).\\n"
@@ -335,6 +365,9 @@ for fname, patch in patches.items():
         # Enrich with filename
         item['file'] = fname
         all_issues.append(item)
+
+# Deduplicate to remove redundant linter/AI overlap
+all_issues = deduplicate_issues(all_issues)
 
 # Sort issues: High severity first
 severity_order = {"High": 0, "Medium": 1, "Low": 2}
