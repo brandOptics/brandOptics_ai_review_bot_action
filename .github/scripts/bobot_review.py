@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import os
 import sys
 import json
@@ -287,6 +288,8 @@ def analyze_code_chunk(filename, patch_content):
     
     If no significant issues, return [].
     Ensure 'suggestion' uses proper newlines (\n) for readability. Do not flatten code.
+    Example: 
+    "suggestion": "line1();\nline2();" NOT "line1(); line2();"
     """)
 
     try:
@@ -497,9 +500,9 @@ if all_issues:
         for i in file_issues:
             # Map type to emoji
             type_icon = "🔵"
-            if i['type'] == 'Security': type_icon = "🔴"
-            elif i['type'] == 'Performance': type_icon = "🟡"
-            elif i['type'] == 'Standards': type_icon = "🎨"
+            if i['type'] == 'Security': type_icon = ":red_circle:"
+            elif i['type'] == 'Performance': type_icon = ":warning:"
+            elif i['type'] == 'Standards': type_icon = ":art:"
             
             # Message formatting
             md.append(f"| {i['line']} | {type_icon} | **{i['message']}** |")
