@@ -256,41 +256,36 @@ def analyze_code_chunk(filename, patch_content):
     Sends the patch context to AI for deep analysis (Security, Perf, Standards).
     Emulates SonarQube "Clean Code" principles.
     """
-    prompt = dedent(f"""
-    You are an Expert Code Reviewer and Static Analyzer aiming to enforce **SonarQube/SonarWay** Clean Code principles.
-    Analyze the following code changes for file: `{filename}`
-
-    **Goal:** Identify critical issues, code smells, and security hotspots.
-    
-    **Focus Areas (SonarWay):**
-    1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).
-    2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).
-    3. [Maintainability] (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).
-    
-    **Input:**
-    ```diff
-    {patch_content}
-    ```
-
-    **Response Format (JSON only):**
-    [
-        {{
-            "line": <line_number_approx>,
-            "type": "Security" | "Performance" | "Standards",
-            "severity": "High" | "Medium" | "Low",
-            "message": "<short_title_like_Sonar_Rule>",
-            "analysis": "<detailed_explanation>",
-            "original_code": "<the_problematic_code_snippet_from_diff>",
-            "suggestion": "<multi_line_fixed_code_block>"
-        }},
-        ...
-    ]
-    
-    If no significant issues, return [].
-    Ensure 'suggestion' uses proper newlines (\n) for readability. Do not flatten code.
-    Example: 
-    "suggestion": "line1();\nline2();" NOT "line1(); line2();"
-    """)
+    prompt = (
+        f"You are an Expert Code Reviewer and Static Analyzer aiming to enforce **SonarQube/SonarWay** Clean Code principles.\\n"
+        f"Analyze the following code changes for file: `{filename}`\\n\\n"
+        "**Goal:** Identify critical issues, code smells, and security hotspots.\\n\\n"
+        "**Focus Areas (SonarWay):**\\n"
+        "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
+        "2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).\\n"
+        "3. [Maintainability] (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).\\n\\n"
+        "**Input:**\\n"
+        "```diff\\n"
+        f"{patch_content}\\n"
+        "```\\n\\n"
+        "**Response Format (JSON only):**\\n"
+        "[\\n"
+        "    {\\n"
+        "        'line': <line_number_approx>,\\n"
+        "        'type': 'Security' | 'Performance' | 'Standards',\\n"
+        "        'severity': 'High' | 'Medium' | 'Low',\\n"
+        "        'message': '<short_title_like_Sonar_Rule>',\\n"
+        "        'analysis': '<detailed_explanation>',\\n"
+        "        'original_code': '<the_problematic_code_snippet_from_diff>',\\n"
+        "        'suggestion': '<multi_line_fixed_code_block>'\\n"
+        "    },\\n"
+        "    ...\\n"
+        "]\\n\\n"
+        "If no significant issues, return [].\\n"
+        "Ensure 'suggestion' uses proper newlines (\\n) for readability. Do not flatten code.\\n"
+        "Example:\\n"
+        '"suggestion": "line1();\\nline2();" NOT "line1(); line2();"'
+    )
 
     try:
         resp = openai.chat.completions.create(
@@ -369,19 +364,17 @@ badge_perf = get_badge("Performance", perf_count, "green", "orange")
 badge_qual = get_badge("Code_Quality", standards_count, "success", "yellow") # Underscore ensures correct rendering
 
 # Developer Rating Generation
-rating_prompt = dedent(f"""
-Rate this PR based on stats:
-- Security Issues: {security_count}
-- Performance Issues: {perf_count}
-- Standards Issues: {standards_count}
-- Files: {len(patches)}
-
-Output specifically:
-1. Star Rating (1-5 stars icons)
-2. A Creative "Hero Title" (e.g., Code Ninja, Bug Slayer, Spaghetti Chef)
-""")
-Separated by a pipe symbol `|`.
-""")
+rating_prompt = (
+    f"Rate this PR based on stats:\\n"
+    f"- Security Issues: {security_count}\\n"
+    f"- Performance Issues: {perf_count}\\n"
+    f"- Standards Issues: {standards_count}\\n"
+    f"- Files: {len(patches)}\\n\\n"
+    "Output specifically:\\n"
+    "1. Star Rating (1-5 stars icons)\\n"
+    "2. A Creative 'Hero Title' (e.g., Code Ninja, Bug Slayer)\\n"
+    "Separated by a pipe symbol |."
+)
 try:
     rating_resp = openai.chat.completions.create(
         model="gpt-4o-mini",
