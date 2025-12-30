@@ -523,20 +523,18 @@ if all_issues:
                 if i.get('original_code'):
                     original_blk = f"**Original Code:**\n```{fence}\n{i['original_code']}\n```\n\n"
                 
-                md.append(f"""
-<details>
-<summary><b>v Line {i['line']}: {i['message']}</b></summary> 
-<br>
-
-**Why it matters:**
-{i['analysis']}
-
-{original_blk}**Suggested Fix:**
-```{fence}
-{i['suggestion']}
-```
-</details>
-""")
+                md.append("\n<details>")
+                md.append(f"<summary><b>v Line {i['line']}: {i['message']}</b></summary>") 
+                md.append("<br>\n")
+                md.append(f"**Why it matters:**\n{i['analysis']}\n")
+                
+                if original_blk:
+                    md.append(original_blk)
+                    
+                md.append("**Suggested Fix:**")
+                md.append(f"```{fence}")
+                md.append(i['suggestion'])
+                md.append("```\n</details>\n")
             md.append("</blockquote>")
 
         md.append("</details>")
