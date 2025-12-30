@@ -11,7 +11,7 @@ from github import Github
 import pytz
 from datetime import datetime
 
-# --- 1) SETUP ──────────────────────────────────────────────────────────
+# --- 1) SETUP ----------------------------------------------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
@@ -22,13 +22,13 @@ TARGET_TIMEZONE_NAME = os.getenv("TARGET_TIMEZONE", "Asia/Kolkata")
 LOGO_URL = "https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png"
 
 if not OPENAI_API_KEY or not GITHUB_TOKEN:
-    print("⛔️ Missing OpenAI or GitHub token.")
+    print("[ERROR] Missing OpenAI or GitHub token.")
     exit(1)
 
 openai.api_key = OPENAI_API_KEY
 gh = Github(GITHUB_TOKEN)
 
-# --- 2) LOAD PR DATA ────────────────────────────────────────────────────
+# --- 2) LOAD PR DATA ----------------------------------------------------
 with open(EVENT_PATH) as f:
     event = json.load(f)
 
@@ -56,7 +56,7 @@ try:
 except Exception:
     formatted_created_at = created_at_str
 
-# --- HELPER: LANGUAGE FENCE ─────────────────────────────────────────────
+# --- HELPER: LANGUAGE FENCE ---------------------------------------------
 def get_language_fence(filename):
     """Returns the markdown fence identifier for a given filename."""
     ext = Path(filename).suffix.lower()
@@ -73,7 +73,7 @@ def get_language_fence(filename):
     return mapping.get(ext, '')
 
 
-# --- 3) PATCH PARSING & CONTEXT ─────────────────────────────────────────
+# --- 3) PATCH PARSING & CONTEXT -----------------------------------------
 def get_file_patches(pr_obj):
     """
     Retrieves patches for all changed files (excluding .github/ folder).
@@ -113,7 +113,7 @@ def parse_patch_lines(patch):
                 current_line += 1
     return results
 
-# --- 3b) HELPER: LOAD LINTER REPORTS ────────────────────────────────────
+# --- 3b) HELPER: LOAD LINTER REPORTS ------------------------------------
 def load_json(path: Path):
     try:
         if path.exists():
@@ -250,7 +250,7 @@ def collect_linter_issues(changed_files):
 
     return issues
 
-# --- 4) AI ANALYZER ─────────────────────────────────────────────────────
+# --- 4) AI ANALYZER -----------------------------------------------------
 def analyze_code_chunk(filename, patch_content):
     """
     Sends the patch context to AI for deep analysis (Security, Perf, Standards).
@@ -263,9 +263,9 @@ def analyze_code_chunk(filename, patch_content):
     **Goal:** Identify critical issues, code smells, and security hotspots.
     
     **Focus Areas (SonarWay):**
-    1. 🔴 **Security:** (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).
-    2. 🟡 **Reliability & Performance:** (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).
-    3. 🔵 **Maintainability (Code Smells):** (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).
+    1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).
+    2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).
+    3. [Maintainability] (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).
     
     **Input:**
     ```diff
@@ -313,7 +313,7 @@ def analyze_code_chunk(filename, patch_content):
         print(f"Error analyzing {filename}: {e}")
         return []
 
-# --- 5) EXECUTE ANALYSIS ────────────────────────────────────────────────
+# --- 5) EXECUTE ANALYSIS ------------------------------------------------
 patches = get_file_patches(pr)
 all_issues = []
 
@@ -321,7 +321,7 @@ all_issues = []
 linter_issues = collect_linter_issues(patches.keys())
 all_issues.extend(linter_issues)
 
-print(f"🔍 Analyzing {len(patches)} files...")
+print(f"[INFO] Analyzing {len(patches)} files...")
 
 for fname, patch in patches.items():
     # Detect if file is relevant (skip locks, assets, etc.)
@@ -345,7 +345,7 @@ for fname, patch in patches.items():
 severity_order = {"High": 0, "Medium": 1, "Low": 2}
 all_issues.sort(key=lambda x: severity_order.get(x.get('severity', 'Low'), 2))
 
-# --- 6) GENERATE RATINGS & COMPONENT STATS ──────────────────────────────
+# --- 6) GENERATE RATINGS & COMPONENT STATS ------------------------------
 security_count = sum(1 for i in all_issues if i['type'] == 'Security')
 perf_count = sum(1 for i in all_issues if i['type'] == 'Performance')
 standards_count = sum(1 for i in all_issues if i['type'] == 'Standards')
@@ -394,7 +394,7 @@ try:
     else:
         stars, hero_title = rating_out, "Code Contributor"
 except:
-    stars, hero_title = "⭐️⭐️⭐️", "Code Contributor"
+    stars, hero_title = "***", "Code Contributor"
 
 def get_troll_message(username):
     try:
@@ -408,8 +408,8 @@ def get_troll_message(username):
         print(f"Error generating troll message: {e}")
         return "Why did the developer go broke? Because he used up all his cache!"
 
-# --- 7) GENERATE MARKDOWN COMMENT ───────────────────────────────────────
-print("📝 Generating Hybrid Neural Nexus Comment...")
+# --- 7) GENERATE MARKDOWN COMMENT ---------------------------------------
+print("[INFO] Generating Hybrid Neural Nexus Comment...")
 
 md = []
 
@@ -453,11 +453,11 @@ md.append(f"""<div align="center">
 top_issues = [i for i in all_issues if i['severity'] == "High"]
 
 if top_issues:
-    md.append("### 🚨 Critical Focus\n*Immediate attention required.*")
+    md.append("### :rotating_light: Critical Focus\n*Immediate attention required.*")
     for i in top_issues:
         fence = get_language_fence(i['file'])
         md.append(f"""
-> **🔴 {i['message']}** in `{i['file']}`
+> **:red_circle: {i['message']}** in `{i['file']}`
 >
 > **Analysis:** {i['analysis']}
 > ```{fence}
@@ -468,13 +468,13 @@ if top_issues:
 
 # 7c) Assessment (Only if clean)
 elif not all_issues:
-    md.append("\n### ✨ Assessment")
+    md.append("\n### :sparkles: Assessment")
     md.append("No significant issues found. Great job maintaining code quality!")
 
 
 # 7d) DETAILED ISSUE BREAKDOWN (Executive V2: Collapsible Files + Detailed Insights)
 if all_issues:
-    md.append("\n## 📂 File-by-File Analysis")
+    md.append("\n## :open_file_folder: File-by-File Analysis")
     
     # Group issues by file
     issues_by_file = {}
@@ -485,9 +485,9 @@ if all_issues:
 
     for filename, file_issues in issues_by_file.items():
         # Determine icon based on worst severity in file
-        file_icon = "📄"
-        if any(i['severity'] == 'High' for i in file_issues): file_icon = "🔴"
-        elif any(i['severity'] == 'Medium' for i in file_issues): file_icon = "🟡"
+        file_icon = ":page_facing_up:"
+        if any(i['severity'] == 'High' for i in file_issues): file_icon = ":red_circle:"
+        elif any(i['severity'] == 'Medium' for i in file_issues): file_icon = ":warning:"
         
         # File Collapsible Header
         md.append(f"\n<details>")
@@ -499,7 +499,7 @@ if all_issues:
         
         for i in file_issues:
             # Map type to emoji
-            type_icon = "🔵"
+            type_icon = ":large_blue_circle:"
             if i['type'] == 'Security': type_icon = ":red_circle:"
             elif i['type'] == 'Performance': type_icon = ":warning:"
             elif i['type'] == 'Standards': type_icon = ":art:"
@@ -515,7 +515,7 @@ if all_issues:
         
         if rich_issues:
             md.append("<blockquote>")
-            md.append("<b>🧠 AI Insights & Fixes</b><br>")
+            md.append("<b>:brain: AI Insights & Fixes</b><br>")
             
             for i in rich_issues:
                 fence = get_language_fence(filename)
@@ -525,7 +525,7 @@ if all_issues:
                 
                 md.append(f"""
 <details>
-<summary><b>▼ Line {i['line']}: {i['message']}</b></summary> 
+<summary><b>v Line {i['line']}: {i['message']}</b></summary> 
 <br>
 
 **Why it matters:**
@@ -545,11 +545,11 @@ if all_issues:
 
 md.append(f"""
 <div align="center">
-  <sub>Generated by <b>BrandOptics A.I.</b> • <a href="{pr.html_url}">View PR</a></sub>
+  <sub>Generated by <b>BrandOptics A.I.</b> - <a href="{pr.html_url}">View PR</a></sub>
 </div>
 """)
 
-# --- 8) POST COMMENT ────────────────────────────────────────────────────
+# --- 8) POST COMMENT ----------------------------------------------------
 final_body = "\n".join(md)
 
 # Only post if there are issues OR it's a "clean run" notification
@@ -557,7 +557,7 @@ final_body = "\n".join(md)
 try:
     # Post to GitHub
     pr.create_issue_comment(final_body)
-    print(f"✅ Posted Neural Nexus Review for PR #{pr_number}")
+    print(f"[SUCCESS] Posted Neural Nexus Review for PR #{pr_number}")
     
     # Set Status Check
     # Fail if Security Issues > 0 OR Linter Errors > 0
@@ -571,14 +571,14 @@ try:
     )
 
 except Exception as e:
-    print(f"❌ Failed to post comment: {e}")
+    print(f"[ERROR] Failed to post comment: {e}")
     # Print for debug
     print(final_body)
-# --- 9) EXIT CODE (BLOCK MERGE) ──────────────────────────────────────────
+# --- 9) EXIT CODE (BLOCK MERGE) ------------------------------------------
 # Ensure the Action itself fails if the check failed.
 if (security_count > 0) or any(i.get("severity") == "High" for i in all_issues):
-    print("\n⛔️ BLOCKING MERGE: Critical Issues Found. Fix them to proceed.")
+    print("\n[BLOCKING] Critical Issues Found. Fix them to proceed.")
     sys.exit(1)
 else:
-    print("\n✅ QA PASSED.")
+    print("\n[SUCCESS] QA PASSED.")
     sys.exit(0)
