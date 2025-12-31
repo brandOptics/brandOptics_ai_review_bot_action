@@ -315,18 +315,20 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
         f"{patch_content}\\n"
         "```\\n\\n"
         "**Response Format (JSON only):**\\n"
-        "[\\n"
-        "    {\\n"
-        "        'line': <line_number_approx>,\\n"
-        "        'type': 'Security' | 'Performance' | 'Standards' | 'Refactoring',\\n"
-        "        'severity': 'High' | 'Medium' | 'Low',\\n"
-        "        'message': '<short_title_like_Sonar_Rule_or_Refactor Application>',\\n"
-        "        'analysis': '<detailed_explanation_of_why_fix_is_needed>',\\n"
-        "        'original_code': '<the_problematic_code_snippet_WITH_LINE_NUMBERS>',\\n"
-        "        'suggestion': '<multi_line_VALID_code_block_that_FIXES_the_issue>'\\n"
-        "    }\\n"
-        "]\\n\\n"
-        "**FINAL MANDATE:** If 'KNOWN LINTER ISSUES' were provided in the prompt, you **MUST** return at least one issue (either a 'Refactoring' that solves them all, or individual 'Standards' fixes). Do NOT return [] in this case.\\n"
+        "{\\n"
+        "    'issues': [\\n"
+        "        {\\n"
+        "            'line': <line_number_approx>,\\n"
+        "            'type': 'Security' | 'Performance' | 'Standards' | 'Refactoring',\\n"
+        "            'severity': 'High' | 'Medium' | 'Low',\\n"
+        "            'message': '<short_title_like_Sonar_Rule_or_Refactor Application>',\\n"
+        "            'analysis': '<detailed_explanation_of_why_fix_is_needed>',\\n"
+        "            'original_code': '<the_problematic_code_snippet_WITH_LINE_NUMBERS>',\\n"
+        "            'suggestion': '<multi_line_VALID_code_block_that_FIXES_the_issue>'\\n"
+        "        }\\n"
+        "    ]\\n"
+        "}\\n\\n"
+        "**FINAL MANDATE:** If 'KNOWN LINTER ISSUES' were provided in the prompt, you **MUST** return at least one issue (either a 'Refactoring' that solves them all, or individual 'Standards' fixes). Do NOT return specific issues if there are none.\\n"
     )
 
     try:
@@ -359,7 +361,7 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
                 f"{linter_context}\\n\\n"
                 f"**Input Code:**\\n```text\\n{patch_content}\\n```\\n\\n"
                 "**Response Format:**\\n"
-                "[ { 'line': <int>, 'type': 'Standards', 'severity': 'Medium', 'message': '<msg>', 'analysis': 'Fixing linter error', 'original_code': '<code>', 'suggestion': '<fixed_code>' } ]"
+                "{ 'issues': [ { 'line': <int>, 'type': 'Standards', 'severity': 'Medium', 'message': '<msg>', 'analysis': 'Fixing linter error', 'original_code': '<code>', 'suggestion': '<fixed_code>' } ] }"
             )
             try:
                 fix_resp = openai.chat.completions.create(
