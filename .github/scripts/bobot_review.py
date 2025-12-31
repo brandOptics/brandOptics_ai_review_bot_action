@@ -303,7 +303,6 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
         "   - Cyclomatic Complexity > 10 -> Suggest splitting.\\n\\n"
         "B. **Naming & Style:**\\n"
         "   - Variables/Methods: camelCase (JS/Java/Dart), snake_case (Python).\\n"
-        "   - Classes: PascalCase. Constants: UPPER_SNAKE_CASE.\\n"
         "   - Booleans should have prefixes (is, has, should).\\n\\n"
         "C. **Architecture & Logic:**\\n"
         "   - **Fail Fast:** Flag deep if/else nesting; suggest Guard Clauses.\\n"
@@ -327,7 +326,7 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
         "        'suggestion': '<multi_line_VALID_code_block_that_FIXES_the_issue>'\\n"
         "    }\\n"
         "]\\n\\n"
-        "If no significant issues, return [].\\n"
+        "**FINAL MANDATE:** If 'KNOWN LINTER ISSUES' were provided in the prompt, you **MUST** return at least one issue (either a 'Refactoring' that solves them all, or individual 'Standards' fixes). Do NOT return [] in this case.\\n"
     )
 
     try:
@@ -416,15 +415,22 @@ def main():
 
         # Identifiy changed lines (used for validation AND context)
         changed_lines = parse_patch_lines(patch)
-        if not changed_lines:
+        
+        # Filter linter issues for this file
+        this_file_linter_issues = [i for i in linter_issues if i['file'] == fname]
+
+        # CRITICAL: We MUST run AI if there are linter issues, even if parse_patch_lines returns empty 
+        # (e.g., complex diffs, deps updates).
+        if not changed_lines and not this_file_linter_issues:
             continue
 
         # Format patch with line numbers for AI Context (Fixes hallucinated line numbers)
-        # Example: "102: final String url = '...';"
-        patch_with_lines = "\n".join([f"{ln}: {txt}" for ln, txt in changed_lines])
-
-        # Filter linter issues for this file
-        this_file_linter_issues = [i for i in linter_issues if i['file'] == fname]
+        # If changed_lines is empty but we proceed, use raw patch or placeholders
+        if changed_lines:
+            patch_with_lines = "\n".join([f"{ln}: {txt}" for ln, txt in changed_lines])
+        else:
+            # Fallback: Just pass the raw patch if we can't parse lines but need to fix linter
+            patch_with_lines = patch
 
         # Get AI Feedback
         ai_feedback = analyze_code_chunk(fname, patch_with_lines, this_file_linter_issues)
