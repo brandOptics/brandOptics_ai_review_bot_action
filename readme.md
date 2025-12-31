@@ -1,5 +1,5 @@
 <div align="center">
-  <img src=".github/assets/brandoptics_neural_nexus_banner.png" width="100%" alt="BrandOptics Neural Nexus - AI Code Review" />
+  <img src=".github/assets/brandoptics_neural_nexus_banner.jpeg" width="100%" alt="BrandOptics Neural Nexus - AI Code Review" />
 
   <br />
   
