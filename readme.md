@@ -1,475 +1,380 @@
-![brandOptics Logo](https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png)
+<div align="center">
+  <img src=".github/assets/brandoptics_neural_nexus_banner.jpeg" width="100%" alt="BrandOptics Neural Nexus - AI Code Review" />
 
-# brandOptics AI Neural Nexus Code Review
+  <br />
+  
+  <h1>BrandOptics Neural Nexus</h1>
+  <h3>Automated Code Intelligence v3.5</h3>
 
-The **brandOptics AI Neural Nexus** GitHub Action delivers automated, AI-assisted code reviews across multiple programming languages. It supports advanced linting for Flutter and React, with Angular and .NET support actively in development.
+  <p>
+    <a href="#-core-intelligence">Core Intelligence</a> •
+    <a href="#-capabilities">Capabilities</a> •
+    <a href="#-integration">Integration</a> •
+    <a href="#-configuration">Configuration</a>
+  </p>
 
----
-
-## 🔖 Current Version
-
-**v3.3.4** – Full support for Flutter, React & Node. Angular and .NET support is in progress.
-
----
-
-## 📚 Table of Contents
-
-1. [Usage in CI/CD](#usage-in-cicd)
-2. [Flutter Setup](#flutter-setup)
-3. [React Setup](#react-setup)
-4. [Node Setup](#node-setup)
-5. [Secrets Configuration](#secrets-configuration)
-6. [Supported Languages](#supported-languages)
-7. [Roadmap](#roadmap)
+  <p>
+    <img src="https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge&logo=github" />
+    <img src="https://img.shields.io/badge/Engine-Hybrid_Neuro--Symbolic-blue?style=for-the-badge&logo=openai" />
+    <img src="https://img.shields.io/badge/License-Proprietary-1f2937?style=for-the-badge" />
+  </p>
+</div>
 
 ---
 
-## Usage in CI/CD
+## ⚡ Core Intelligence
 
-Create `.github/workflows/ci.yml` in your project repository:
+**Neural Nexus** is an autonomous code quality gate designed for high-velocity engineering teams. Unlike standard linters that merely flag syntax errors, Neural Nexus employs a **Hybrid Neuro-Symbolic Architecture**:
+
+1.  **Symbolic Logic (Deterministic)**: Executes industry-standard static analysis (ESLint, Flake8, Dart Analyzer, SQLFluff) to catch hard syntax errors and style violations.
+2.  **Neural Reasoning (Probabilistic)**: Uses sophisticated LLM context windows (GPT-4o) to analyze logic flow, architectural integrity, and security vulnerabilities that static tools miss.
+
+This duality ensures **zero-tolerance** for bugs while providing **senior-level refactoring** suggestions for complex logic.
+
+---
+
+## 🎯 Capabilities
+
+### 1. Auto-Refactoring & Duplication Detection
+Instead of leaving vague comments like "duplicate code", Neural Nexus rewrites the code for you.
+- **Deep Refactoring**: Identifies God Classes or massive functions and suggests modular breakdowns.
+- **Helper Extraction**: Detecting duplicated logic across files? The bot suggests a shared utility method.
+- **Inline Explanations**: Every code change includes comments explaining the *reasoning* (e.g., `// Extracted to reduce cyclomatic complexity`).
+
+### 2. Security & Performance Guardrails
+We map findings directly to **OWASP Top 10** and **SonarWay** quality profiles.
+- **Security**: SQL Injection, Hardcoded Secrets, PII exposure.
+- **Performance**: O(n²) loops, memory leaks, unoptimized database queries.
+- **Reliability**: Empty catch blocks, race conditions, improper state management.
+
+### 3. The Executive Dashboard
+Pull Requests are annotated with a high-fidelity dashboard summarizing the health of the codebase.
+- **Letter Grades**: A / B / C ratings for Security, Quality, and Performance.
+- **Visual Badges**: Instant visibility into the impact of the PR.
+- **Collapsible Insights**: Deep dives into specific files without cluttering the main conversation.
+
+---
+
+## 🌐 Language Support Matrix
+
+| Ecosystem | Static Analysis | Neural Review | Version Support |
+| :--- | :--- | :--- | :--- |
+| **Flutter / Dart** | `Dart Analyzer` | ✅ Logic, Arch, Widgets | Flutter 3.x+ |
+| **JavaScript / TS** | `ESLint` | ✅ Security, Hooks, A11y | Semicolon/Standard |
+| **Node.js** | `ESLint` | ✅ Async Logic, Security | v18+ |
+| **Python** | `Flake8` | ✅ PEP8, Complexity | 3.8+ |
+| **SQL** | `SQLFluff` | ✅ Query Opt, Dialects | Postgres, MySQL |
+| **.NET / C#** | `dotnet format` | ✅ Style, Patterns | .NET 6+ |
+
+---
+
+## 🗺️ Roadmap
+
+- [x] **v3.5**: Mandatory Code Fixes & Deduplication Logic
+- [x] **v3.5**: Enterprise Configuration Rules (Strict)
+- [ ] **v4.0**: Automatic Pull Request Description Generation
+- [ ] **v4.0**: JIRA / Linear Ticket Linking
+- [ ] **v4.5**: Custom LLM Fine-tuning Support (Bring Your Own Model)
+- [ ] **v5.0**: IDE Extensions (VS Code / IntelliJ Plugin)
+
+---
+
+## � Integration
+
+Deploy Neural Nexus as a standard GitHub Action. Add the following to `.github/workflows/review.yml`:
 
 ```yaml
-name: "brandOptics AI Neural Nexus Code Review"
- 
+name: Neural Nexus Review
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
- 
-permissions:
-  contents: read
-  pull-requests: write
-  statuses: write
- 
+    types: [opened, synchronize]
+
 jobs:
-  review:
+  audit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
     steps:
-      # 1) Always checkout first
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
- 
-      # 2) Invoke your composite Action
-      - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
+
+      - name: Execute Neural Nexus
+        uses: brandoptics/brandOptics_ai_review_bot_action@v3
         with:
-          openai_key: ${{ secrets.OPENAI_API_KEY}}
+          openai_key: ${{ secrets.OPENAI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+> **Note**: We recommend pinning to the major version (`@v3`) to receive non-breaking updates automatically. For strict stability, use a specific tag (`@v3.5.0`) or SHA.
+
+### Required Secrets
+Navigate to **Settings → Secrets → Actions** and add:
+- `OPENAI_API_KEY`: A valid OpenAI API key with GPT-4o access.
+
 ---
 
-## Flutter Setup
+## ⚙️ Configuration Guides
 
-Create `.github/workflows/ci.yml` in your project repository:
-When working with multiple repository dependencies (such as packages), they must be cloned into the appropriate folder structure using the steps outlined below.
+Neural Nexus works out-of-the-box, but for enterprise environments, precise configuration is key. Below are elaborate guides for supported ecosystems.
 
+### 1. Flutter & Dart (Mobile)
+For production Flutter apps, you often need to handle private packages and strict linting rules.
+
+**Workflow Setup (`.github/workflows/review.yml`):**
 ```yaml
-name: "brandOptics AI Neural Nexus Code Review"
- 
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
- 
-permissions:
-  contents: read
-  pull-requests: write
-  statuses: write
- 
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      # 1) Always checkout first
-      - name: Checkout code
-        uses: actions/checkout@v4
-      # 2) Clone dependencies repos 
-      - name: Clone eit_design_system_flutter outside workspace
-        shell: bash
-        run: |
-          set -euo pipefail
-          parent="$(dirname "$GITHUB_WORKSPACE")"   # /home/runner/work/retail-flutter
-          mkdir -p "$parent/packages"
+steps:
+  - name: Checkout Source
+    uses: actions/checkout@v4
 
-          # mark safe for any git ops
-          git config --global --add safe.directory "$parent/packages/eit_design_system_flutter" || true
+  # Optional: Authenticate for private pub packages
+  - name: Setup Private Packages
+    run: |
+      git config --global url."https://${{ secrets.PAT }}@github.com/".insteadOf "https://github.com/"
 
-          # clone the private repo with PAT
-          git clone \
-            --depth 1 \
-            --branch retail_app_ceramic_pot \
-            "https://x-access-token:${{ secrets.REVIEW_ENGINE_PAT }}@github.com/brandOptics/eit_design_system_flutter.git" \
-            "$parent/packages/eit_design_system_flutter"
-
-          # sanity check
-          test -f "$parent/packages/eit_design_system_flutter/pubspec.yaml" && echo "✅ external package ready"
-      # 3) Just checking the dependency path is correct 
-      - name: Check relative path
-        run: |
-          echo "Current directory: $(pwd)"
-          test -f ../packages/eit_design_system_flutter/pubspec.yaml && echo "✅ Found package"
-      # 4) Invoke your composite Action
-      - name: Run brandOptics AI review
-        uses: brandoptics/brandOptics_ai_review_bot_action@v3.3.4
-        with:
-          openai_key: ${{ secrets.OPENAI_API_KEY}}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+  - name: Run Neural Nexus
+    uses: brandoptics/brandOptics_ai_review_bot_action@v3
+    with:
+      openai_key: ${{ secrets.OPENAI_API_KEY }}
+      github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-
-
-Add the following `analysis_options.yaml` file to the root of your Flutter project (next to `pubspec.yaml`).
-
+**Linting Rules (`analysis_options.yaml`):**
+Place this file in your project root to enforce rules that Neural Nexus will respect and automatically fix.
 ```yaml
 include: package:flutter_lints/flutter.yaml
 
 linter:
   rules:
-    # Optional additional lint rules
-    always_declare_return_types: true
-    always_put_control_body_on_new_line: true
-    always_put_required_named_parameters_first: true
-    always_require_non_null_named_parameters: true
-    always_specify_types: true
-
-    camel_case_extensions: true
-    camel_case_types: true
-    constant_identifier_names: true
-    non_constant_identifier_names: true
-    file_names: true
-    library_prefixes: true
-    package_names: true
-    package_prefixed_library_names: true
-
-    avoid_annotating_with_dynamic: true
-    avoid_bool_literals_in_conditional_expressions: true
-    avoid_catches_without_on_clauses: true
-    avoid_catching_errors: true
-    avoid_empty_else: true
-    avoid_field_initializers_in_const_classes: true
-    avoid_function_literals_in_foreach_calls: true
-    avoid_init_to_null: true
-    avoid_multiple_declarations_per_line: true
-    avoid_null_checks_in_equality_operators: true
-    avoid_positional_boolean_parameters: true
+    # --- ERROR RESILIENCE ---
     avoid_print: true
-    avoid_private_typedef_functions: true
-    avoid_redundant_argument_values: true
-    avoid_returning_this: true
-    avoid_setters_without_getters: true
-    avoid_shadowing_type_parameters: true
-    avoid_single_cascade_in_expression_statements: true
-    avoid_slow_async_io: true
-    avoid_type_to_string: true
-    avoid_types_as_parameter_names: true
-    avoid_unnecessary_containers: true
-    avoid_unused_constructor_parameters: true
-
-    await_only_futures: true
-    cancel_subscriptions: true
-    cast_nullable_to_non_nullable: true
-    close_sinks: true
-    collection_methods_unrelated_type: true
-    combinators_ordering: true
-    comment_references: true
-    conditional_uri_does_not_exist: true
-    control_flow_in_finally: true
-    curly_braces_in_flow_control_structures: true
-    deprecated_consistency: true
     empty_catches: true
-    empty_constructor_bodies: true
-    empty_statements: true
-    exhaustive_cases: true
-    implicit_call_tearoffs: true
-    implicit_reopen: true
-    invalid_case_patterns: true
-    join_return_with_assignment: true
-    leading_newlines_in_multiline_strings: true
-    no_logic_in_create_state: true
-    no_runtimeType_toString: true
-    null_check_on_nullable_type_parameter: true
-    null_closures: true
-    omit_local_variable_types: false
-
-    only_throw_errors: true
-    overridden_fields: true
-    parameter_assignments: true
     use_build_context_synchronously: true
-    use_function_type_syntax_for_parameters: true
-    use_to_and_as_if_applicable: true
-    valid_regexps: true
-    void_checks: true
-
-    prefer_adjacent_string_concatenation: true
-    prefer_asserts_in_initializer_lists: true
-    prefer_asserts_with_message: true
-    prefer_collection_literals: true
-    prefer_conditional_assignment: true
+    always_declare_return_types: true
+    cancel_subscriptions: true
+    close_sinks: true
+    control_flow_in_finally: true
+    no_duplicate_case_values: true
+    unrelated_type_equality_checks: true
+    
+    # --- STYLE & READABILITY ---
     prefer_const_constructors: true
-    prefer_const_constructors_in_immutables: true
-    prefer_const_declarations: true
-    prefer_const_literals_to_create_immutables: true
-    prefer_constructors_over_static_methods: true
-    prefer_contains: true
-    prefer_double_quotes: true
-    prefer_equal_for_default_values: true
-    prefer_expression_function_bodies: true
-    prefer_final_fields: true
-    prefer_final_in_for_each: true
     prefer_final_locals: true
     prefer_final_parameters: true
-    prefer_for_elements_to_map_fromIterable: true
-    prefer_foreach: true
-    prefer_function_declarations_over_variables: true
-    prefer_generic_function_type_aliases: true
-    prefer_if_elements_to_conditional_expressions: true
-    prefer_if_null_operators: true
-    prefer_initializing_formals: true
-    prefer_inlined_adds: true
-    prefer_int_literals: true
-    prefer_interpolation_to_compose_strings: true
-    prefer_is_empty: true
-    prefer_is_not_empty: true
-    prefer_is_not_operator: true
-    prefer_iterable_whereType: true
-    prefer_mixin: true
-    prefer_null_aware_method_calls: true
-    prefer_null_aware_operators: true
-    prefer_relative_imports: true
-
-    provide_deprecation_message: true
-    recursive_getters: true
-    require_trailing_commas: true
-    slash_for_doc_comments: true
-    sort_child_properties_last: true
-    sort_constructors_first: true
-    sort_unnamed_constructors_first: true
-    test_types_in_equals: true
-    throw_in_finally: true
-    tighten_type_of_initializing_formals: true
-    type_annotate_public_apis: true
-    type_init_formals: true
-    unawaited_futures: true
-
+    always_specify_types: true
+    camel_case_types: true
+    camel_case_extensions: true
+    file_names: true
+    
+    # --- ARCHITECTURE ---
+    await_only_futures: true
     unnecessary_await_in_return: true
-    unnecessary_brace_in_string_interps: true
-    unnecessary_const: true
-    unnecessary_constructor_name: true
-    unnecessary_getters_setters: true
-    unnecessary_lambdas: true
-    unnecessary_library_directive: true
-    unnecessary_new: true
-    unnecessary_null_aware_assignments: true
-    unnecessary_null_in_if_null_operators: true
-    unnecessary_nullable_for_final_variable_declarations: true
-    unnecessary_overrides: true
-    unnecessary_parenthesis: true
-    unnecessary_raw_strings: true
-    unnecessary_statements: true
-    unnecessary_string_escapes: true
-    unnecessary_string_interpolations: true
-    unnecessary_this: true
-    unnecessary_to_list_in_spreads: true
-    unrelated_type_equality_checks: true
+    avoid_void_async: true
+    prefer_expression_function_bodies: true
+    
+    # --- PUBSPEC CHECKS ---
+    sort_pub_dependencies: true
+    package_names: true
 ```
-
-> 💡 **Note:** You may comment out rules that aren't applicable to your project.
 
 ---
 
-## React Setup
+### 2. React & TypeScript (Web)
+Ensure your `eslint.config.js` (or `.eslintrc`) is present so Neural Nexus can detect your specific style guide (Airbnb, Standard, etc.).
 
-Create `eslint.config.js` at your project root:
-
-```js
+**Recommended `eslint.config.js`:**
+```javascript
 import js from '@eslint/js';
-import globals from 'globals';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
-import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
-import importPlugin from 'eslint-plugin-import';
-import sonarjs from 'eslint-plugin-sonarjs';
-import babelParser from '@babel/eslint-parser';
+import tseslint from 'typescript-eslint';
 
 export default [
-  { ignores: ['dist', 'build', 'node_modules'] },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   {
-    files: ['**/*.{js,jsx,ts,tsx}'],
-    languageOptions: {
-      parser: babelParser,
-      globals: globals.browser,
-      parserOptions: {
-        requireConfigFile: false,
-        errorRecovery: true,
-        babelOptions: { presets: ['@babel/preset-react'] },
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-        ecmaFeatures: { jsx: true },
-      },
-    },
+    files: ['**/*.{ts,tsx}'],
     plugins: {
       react,
       'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
-      'jsx-a11y': jsxA11y,
-      import: importPlugin,
-      sonarjs,
+      'jsx-a11y': jsxA11y
     },
-    settings: {
-      react: { version: 'detect' },
-    },
-    rules: {
-      ...js.configs.recommended.rules,
-      ...react.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
-      ...reactRefresh.configs.recommended.rules,
-      ...jsxA11y.configs.recommended.rules,
-      ...importPlugin.configs.recommended.rules,
-      ...sonarjs.configs.recommended.rules,
-      'no-undef': 'error',
-      'no-unused-vars': ['error', { args: 'after-used', argsIgnorePattern: '^_', varsIgnorePattern: '^[A-Z_]' }],
-      'eqeqeq': ['error', 'always'],
-      'no-console': 'warn',
-      'no-debugger': 'error',
-      'no-var': 'error',
-      'prefer-const': 'error',
-    },
-  },
-];
-```
-
----
-
-
-
-
-> 💡 **Note:** You may comment out rules that aren't applicable to your project.
-
----
-
-## Node Setup
-
-Create `eslint.config.js` at your project root:
-
-```js
-/* eslint-env node */
-/* global require, module */
-
-// eslint.config.js
-const js = require("@eslint/js");
-const globals = require("globals");
-const importPlugin = require("eslint-plugin-import");
-const sonarjs = require("eslint-plugin-sonarjs");
-const n = require("eslint-plugin-n");
-
-module.exports = [
-  { ignores: ["dist", "build", "node_modules"] },
-
-  // Treat ESLint config files as CommonJS and don't flag require/module.
-  {
-    files: [
-      "eslint.config.cjs",
-      "eslint.config.js",
-      ".eslintrc.cjs",
-      ".eslintrc.js",
-    ],
     languageOptions: {
-      parserOptions: { sourceType: "script" }, // CommonJS
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
       globals: {
-        ...globals.node,
         ...globals.browser,
-        require: "true",
-        module: "true",
-      },
+      }
     },
     rules: {
-      "no-undef": "off",
-      "n/no-unpublished-import": "off",
-      "n/no-unpublished-require": "off",
-    },
-  },
-
-  {
-    files: ["**/*.{js,mjs,cjs,ts}"],
-    languageOptions: {
-      globals: { ...globals.node },
-      parserOptions: { ecmaVersion: "latest", sourceType: "module" },
-    },
-    plugins: { import: importPlugin, sonarjs, n },
-    settings: {
-      "import/resolver": {
-        node: { extensions: [".js", ".cjs", ".mjs", ".ts", ".json"] },
-      },
-    },
-    rules: {
-      ...js.configs.recommended.rules,
-      ...n.configs["flat/recommended"].rules,
-      ...importPlugin.configs.recommended.rules,
-      ...sonarjs.configs.recommended.rules,
-
-      "no-undef": "error",
-      "no-unused-vars": [
-        "error",
-        {
-          args: "after-used",
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^[A-Z_]",
-        },
-      ],
-      eqeqeq: ["error", "always"],
-      "no-console": "warn",
-      "no-debugger": "error",
-      "no-var": "error",
-      "prefer-const": "error",
-      "n/no-missing-import": "error",
-      "n/no-unsupported-features/es-builtins": "off",
-      "n/no-unsupported-features/node-builtins": "off",
+      // --- REACT HOOKS (CRITICAL) ---
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      
+      // --- BEST PRACTICES ---
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'prefer-const': 'error',
+      'no-var': 'error',
+      'eqeqeq': 'error',
+      'no-unused-vars': 'off', // Handled by TS
+      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/explicit-function-return-type': 'warn',
+      
+      // --- ACCESSIBILITY ---
+      'jsx-a11y/alt-text': 'error',
+      'jsx-a11y/anchor-has-content': 'error',
+      'jsx-a11y/aria-props': 'error',
+      
+      // --- REACT IDIOMS ---
+      'react/jsx-boolean-value': 'error',
+      'react/self-closing-comp': 'error',
+      'react/jsx-key': 'error'
     },
   },
 ];
-
- 
-
 ```
 
 ---
 
-## Secrets Configuration
+### 3. Node.js (Backend)
+For Express, NestJS, or raw Node.js services, enforce secure coding practices.
 
-### Required: `OPENAI_API_KEY`
-
-#### To set:
-
-1. Navigate to your GitHub repository
-2. Go to **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret**
-4. Name: `OPENAI_API_KEY & REVIEW_ENGINE_PAT `  REVIEW_ENGINE_PAT => is the organizaton developer key, which need to set 
-5. Value: Your OpenAI secret key
-
-✅ `GITHUB_TOKEN` is auto-injected by GitHub.
+**Minimal `eslint.config.js`:**
+```javascript
+module.exports = [
+  js.configs.recommended,
+  {
+    files: ["**/*.js"],
+    languageOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module"
+    },
+    rules: {
+      // --- SECURITY & SAFETY ---
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-new-func": "error",
+      "no-caller": "error",
+      "no-proto": "error",
+      "no-iterator": "error",
+      
+      // --- BUG PREVENTION ---
+      "eqeqeq": ["error", "always"],
+      "no-return-await": "error",
+      "require-await": "error",
+      "array-callback-return": "error",
+      "no-self-compare": "error",
+      "no-template-curly-in-string": "error",
+      "no-unmodified-loop-condition": "error",
+      
+      // --- STYLE & MAINTENANCE ---
+      "camelcase": ["warn", { "properties": "never" }],
+      "complexity": ["warn", 15],
+      "max-depth": ["warn", 4],
+      "max-params": ["warn", 5],
+      "no-shadow": "warn"
+    }
+  }
+];
+```
 
 ---
 
-## Supported Languages
+### 4. Python (Data & Backend)
+Neural Nexus checks for PEP8 compliance and cognitive complexity.
 
-| Language | Status           |
-| -------- | ---------------- |
-| Flutter  | ✅ Stable         |
-| React    | ✅ Stable         |
-| Angular  | 🚧 In Progress   |
-| .NET     | 🚧 In Progress   |
-| Python   | ✅ Basic (Flake8) |
-| Node   | ✅ Stable|
+**Required `.flake8` Config:**
+Add this to your root to avoid linting virtualenvs or cache files.
+```ini
+[flake8]
+# --- CORE SETTINGS ---
+max-line-length = 100
+max-complexity = 15
+exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,venv,env,migrations
+
+# --- ERROR CODES TO IGNORE (Black Compatible) ---
+# E203: Whitespace before ':'
+# W503: Line break before binary operator
+ignore = E203, W503
+
+# --- ENFORCEMENT ---
+# C901: Function verification complexity
+# F401: Module imported but unused
+select = C,E,F,W,B,B950
+```
 
 ---
 
-## Roadmap
+### 5. SQL (Database)
+Ensure your queries remain optimized and readable across dialects (Postgres, MySQL, BigQuery).
 
-* ✅ Improve feedback formatting
-* 🚧 Angular support (TypeScript / HTML)
-* 🚧 .NET C# support
-* 🚧 Markdown and stylelint integration
+**Required `.sqlfluff` Config:**
+```ini
+[sqlfluff]
+dialect = postgres
+templater = raw
+# Exclude dbt packages/macros content
+exclude_rules = L009
+
+[sqlfluff:indentation]
+indent_unit = space
+tab_space_size = 4
+
+[sqlfluff:rules]
+max_line_length = 80
+allow_scalar = True
+single_table_references = consistent
+unquoted_identifiers_policy = all
+
+[sqlfluff:rules:L010]
+# Keywords Uppercase
+capitalisation_policy = upper
+
+[sqlfluff:rules:L014]
+# Unquoted identifiers Lowercase
+extended_capitalisation_policy = lower
+```
 
 ---
 
-> Made with ❤️ by the brandOptics AI R\&D team
+### 6. .NET / C#
+For Enterprise C# applications, we use `dotnet format`.
+
+**Required `root.editorconfig`:**
+Standardize your C# formatting rules.
+```ini
+root = true
+
+[*.cs]
+# --- INDENTATION ---
+indent_style = space
+indent_size = 4
+
+# --- NEWLINES ---
+end_of_line = lf
+insert_final_newline = true
+new_line_before_open_brace = all
+
+# --- LANGUAGE RULES ---
+# Prefer 'var' only when obvious
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = false:warning
+
+# --- EXPRESSION BODIES ---
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+
+# --- PATTERN MATCHING ---
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+```
+
+---
+
+<div align="center">
+  <sub><b>BrandOptics Engineering</b> • <i>Building the future of automated software assurance.</i></sub>
+</div>
