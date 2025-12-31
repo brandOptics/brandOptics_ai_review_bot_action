@@ -443,10 +443,16 @@ def main():
     # Helper: Enrich linter issues with code context if available in patch
     all_issues = enrich_linter_issues(all_issues, patches)
 
+    # CRITICAL: Prioritize "Rich" issues (AI) over "Empty" issues (Linter) for deduplication
+    # We sort by boolean: Has Suggestion? (True first).
+    # This ensures that if AI returns a fix for the *exact same* linter error, 
+    # the AI version (with the code) is processed first (or overrides) in the dedupe logic.
+    all_issues.sort(key=lambda x: 1 if x.get('suggestion') else 0, reverse=True)
+
     # Deduplicate and Consolidate: Remove redundant linter/AI overlap
     all_issues = consolidate_issues(all_issues)
 
-    # Sort issues: High severity first
+    # Sort issues: High severity first (for display)
     severity_order = {"High": 0, "Medium": 1, "Low": 2}
     all_issues.sort(key=lambda x: severity_order.get(x.get('severity', 'Low'), 2))
 
