@@ -222,6 +222,7 @@ def enrich_linter_issues(issues, patches):
         # If it's a linter issue (no original_code) and we have the file
         if not i.get('original_code') and i['file'] in file_map:
             line_code = file_map[i['file']].get(i['line'])
+            if line_code:
                 i['original_code'] = line_code.strip()
                 # Do NOT add generic "Fix violation" comments. User prefers no suggestion over a dummy one.
                 # if i.get('suggestion') in ["Fix analysis issue."...]: ...
