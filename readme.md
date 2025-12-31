@@ -55,6 +55,30 @@ Pull Requests are annotated with a high-fidelity dashboard summarizing the healt
 
 ---
 
+## 🌐 Language Support Matrix
+
+| Ecosystem | Static Analysis | Neural Review | Version Support |
+| :--- | :--- | :--- | :--- |
+| **Flutter / Dart** | `Dart Analyzer` | ✅ Logic, Arch, Widgets | Flutter 3.x+ |
+| **JavaScript / TS** | `ESLint` | ✅ Security, Hooks, A11y | Semicolon/Standard |
+| **Node.js** | `ESLint` | ✅ Async Logic, Security | v18+ |
+| **Python** | `Flake8` | ✅ PEP8, Complexity | 3.8+ |
+| **SQL** | `SQLFluff` | ✅ Query Opt, Dialects | Postgres, MySQL |
+| **.NET / C#** | `dotnet format` | ✅ Style, Patterns | .NET 6+ |
+
+---
+
+## 🗺️ Roadmap
+
+- [x] **v3.5**: Mandatory Code Fixes & Deduplication Logic
+- [x] **v3.5**: Enterprise Configuration Rules (Strict)
+- [ ] **v4.0**: Automatic Pull Request Description Generation
+- [ ] **v4.0**: JIRA / Linear Ticket Linking
+- [ ] **v4.5**: Custom LLM Fine-tuning Support (Bring Your Own Model)
+- [ ] **v5.0**: IDE Extensions (VS Code / IntelliJ Plugin)
+
+---
+
 ## � Integration
 
 Deploy Neural Nexus as a standard GitHub Action. Add the following to `.github/workflows/review.yml`:
