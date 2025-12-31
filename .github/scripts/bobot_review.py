@@ -11,50 +11,7 @@ from github import Github
 import pytz
 from datetime import datetime
 
-# --- 1) SETUP ----------------------------------------------------------
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
-REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
-EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
-TARGET_TIMEZONE_NAME = os.getenv("TARGET_TIMEZONE", "Asia/Kolkata")
-
-# LOGO & BRANDING
-LOGO_URL = "https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png"
-
-if not OPENAI_API_KEY or not GITHUB_TOKEN:
-    print("[ERROR] Missing OpenAI or GitHub token.")
-    exit(1)
-
-openai.api_key = OPENAI_API_KEY
-gh = Github(GITHUB_TOKEN)
-
-# --- 2) LOAD PR DATA ----------------------------------------------------
-with open(EVENT_PATH) as f:
-    event = json.load(f)
-
-pr_number = event["pull_request"]["number"]
-full_sha  = event["pull_request"]["head"]["sha"]
-repo      = gh.get_repo(REPO_NAME)
-pr        = repo.get_pull(pr_number)
-
-dev_name = event["pull_request"]["user"]["login"]
-title        = event["pull_request"]["title"]
-url          = event["pull_request"]["html_url"]
-source_branch = event["pull_request"]["head"]["ref"]
-target_branch = event["pull_request"]["base"]["ref"]
-created_at_str = event["pull_request"]["created_at"]
-commits      = event["pull_request"]["commits"]
-additions    = event["pull_request"]["additions"]
-deletions    = event["pull_request"]["deletions"]
-
-# --- Timezone Conversion ---
-try:
-    utc_dt = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M:%SZ")
-    utc_dt = pytz.utc.localize(utc_dt)
-    local_tz = pytz.timezone(TARGET_TIMEZONE_NAME)
-    formatted_created_at = utc_dt.astimezone(local_tz).strftime("%B %d, %Y, %I:%M %p %Z")
-except Exception:
-    formatted_created_at = created_at_str
+# --- 1) SETUP (Moved to main) ------------------------------------------
 
 # --- HELPER: LANGUAGE FENCE ---------------------------------------------
 def get_language_fence(filename):
@@ -300,25 +257,39 @@ def deduplicate_issues(issues):
     return list(unique_map.values())
 
 # --- 4) AI ANALYZER -----------------------------------------------------
-def analyze_code_chunk(filename, patch_content):
+def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
     """
     Sends the patch context to AI for deep analysis (Security, Perf, Standards).
     Emulates SonarQube "Clean Code" principles.
     """
+    # Format linter issues for the prompt
+    linter_context = ""
+    if file_linter_issues:
+        linter_context = "KNOWN LINTER/STATIC ANALYSIS ISSUES (You MUST fix these in your suggestions):\n"
+        for i in file_linter_issues:
+             linter_context += f"- Line {i['line']}: [{i['type']}] {i['message']} ({i['analysis']})\n"
+
     prompt = (
         f"You are an Expert Code Reviewer and Static Analyzer aiming to enforce **SonarQube/SonarWay** Clean Code principles.\\n"
         f"Analyze the following code changes for file: `{filename}`\\n\\n"
-        "**Goal:** Identify critical issues, code smells, and security hotspots.\\n\\n"
-        "**CRITICAL RULES:**\\n"
-        "1. **Line Numbers:** The input is formatted as `Line: Code`. You MUST return the EXACT line number provided.\\n"
-        "2. **Constants:** `Class.Property` or `ENUM.VAL` are SAFE. Do NOT flag as hardcoded strings/URLs.\\n"
-        "3. **Empty Catch:** If a catch block contains `return`, `throw`, or `log`, it is HANDLED. Do NOT flag as empty.\\n"
-        "4. **Hardcoded Strings:** ONLY flag explicit literals like `Text('Hello')`. Ignore `const` variables.\\n"
-        "5. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n\\n"
+        "**Goal:** Identify critical issues, code smells, and security hotspots. REFACTOR code to be clean, efficient, and DRY.\\n\\n"
+        
+        "**CRITICAL INSTRUCTIONS:**\\n"
+        "1. **REFACTORING OVER REPORTING:** If you see multiple issues (linter errors, style, duplication) in a single function/block, do NOT report them as 10 separate small issues. Report ONE 'Refactoring' issue for the whole function and provide the **COMPLETE REWRITTEN CODE** that fixes all issues.\\n"
+        "2. **DUPLICATION & LOGIC:** Actively look for duplicated logic (DRY), infinite loops, off-by-one errors, and improper implementation patterns. If found, suggest a robust fix.\\n"
+        "3. **REAL CODE WITH COMMENTS:** Your 'suggestion' field must contain the FIXED CODE. **Crucially**, include brief comments INSIDE the code explaining *why* you made specific changes (e.g., `// Extracted to helper for reuse`).\\n"
+        "4. **FORMATTING:** Ensure the code is properly indented and uses newlines. For large methods, do NOT inline everything; use a readable multi-line format.\\n"
+        "5. **Line Numbers:** The input is formatted as `Line: Code`. Return the accurate line number where the issue starts.\\n"
+        "6. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n"
+        "7. **Original Code Context:** When returning `original_code`, you MUST include the line numbers as provided in the input (e.g., `240: int a = 1;`).\\n\\n"
+
         "**Focus Areas (SonarWay):**\\n"
         "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
         "2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).\\n"
         "3. [Maintainability] (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).\\n\\n"
+
+        f"{linter_context}\\n\\n"
+
         "**STRICT STANDARDS TO ENFORCE:**\\n"
         "A. **Hard Metrics:**\\n"
         "   - Nesting Depth > 4 levels -> Suggest extraction.\\n"
@@ -333,6 +304,7 @@ def analyze_code_chunk(filename, patch_content):
         "   - **Error Handling:** Flag empty catch blocks or swallowed errors.\\n"
         "   - **SOLID:** Flag God Classes (SRP violation) or Tight Coupling.\\n"
         "   - **DRY:** Flag duplicated logic blocks.\\n\\n"
+
         "**Input (Line: Code):**\\n"
         "```text\\n"
         f"{patch_content}\\n"
@@ -341,19 +313,15 @@ def analyze_code_chunk(filename, patch_content):
         "[\\n"
         "    {\\n"
         "        'line': <line_number_approx>,\\n"
-        "        'type': 'Security' | 'Performance' | 'Standards',\\n"
+        "        'type': 'Security' | 'Performance' | 'Standards' | 'Refactoring',\\n"
         "        'severity': 'High' | 'Medium' | 'Low',\\n"
-        "        'message': '<short_title_like_Sonar_Rule>',\\n"
-        "        'analysis': '<detailed_explanation>',\\n"
-        "        'original_code': '<the_problematic_code_snippet_from_diff>',\\n"
-        "        'suggestion': '<multi_line_fixed_code_block>'\\n"
-        "    },\\n"
-        "    ...\\n"
+        "        'message': '<short_title_like_Sonar_Rule_or_Refactor Application>',\\n"
+        "        'analysis': '<detailed_explanation_of_why_fix_is_needed>',\\n"
+        "        'original_code': '<the_problematic_code_snippet_WITH_LINE_NUMBERS>',\\n"
+        "        'suggestion': '<multi_line_VALID_code_block_that_FIXES_the_issue>'\\n"
+        "    }\\n"
         "]\\n\\n"
         "If no significant issues, return [].\\n"
-        "Ensure 'suggestion' uses proper newlines (\\n) for readability. Do not flatten code.\\n"
-        "Example:\\n"
-        '"suggestion": "line1();\\nline2();" NOT "line1(); line2();"'
     )
 
     try:
@@ -377,271 +345,325 @@ def analyze_code_chunk(filename, patch_content):
         print(f"Error analyzing {filename}: {e}")
         return []
 
-# --- 5) EXECUTE ANALYSIS ------------------------------------------------
-patches = get_file_patches(pr)
-all_issues = []
+def main():
+    # --- 1) SETUP ----------------------------------------------------------
+    global OPENAI_API_KEY, GITHUB_TOKEN, REPO_NAME, EVENT_PATH, TARGET_TIMEZONE_NAME, LOGO_URL, openai, gh, pr_number, full_sha, repo, pr
 
-# 5a) Collect Linter Issues
-linter_issues = collect_linter_issues(patches.keys())
-all_issues.extend(linter_issues)
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
+    REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
+    EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
+    TARGET_TIMEZONE_NAME = os.getenv("TARGET_TIMEZONE", "Asia/Kolkata")
 
-print(f"[INFO] Analyzing {len(patches)} files...")
+    # LOGO & BRANDING
+    LOGO_URL = "https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png"
 
-for fname, patch in patches.items():
-    # Detect if file is relevant (skip locks, assets, etc.)
-    if any(fname.endswith(ext) for ext in ['.png', '.jpg', '.lock', '.json']):
-        continue
+    if not OPENAI_API_KEY or not GITHUB_TOKEN:
+        print("[ERROR] Missing OpenAI or GitHub token.")
+        exit(1)
 
-    # Identifiy changed lines (used for validation AND context)
-    changed_lines = parse_patch_lines(patch)
-    if not changed_lines:
-        continue
+    openai.api_key = OPENAI_API_KEY
+    gh = Github(GITHUB_TOKEN)
 
-    # Format patch with line numbers for AI Context (Fixes hallucinated line numbers)
-    # Example: "102: final String url = '...';"
-    patch_with_lines = "\n".join([f"{ln}: {txt}" for ln, txt in changed_lines])
+    # --- 2) LOAD PR DATA ----------------------------------------------------
+    with open(EVENT_PATH) as f:
+        event = json.load(f)
 
-    # Get AI Feedback
-    ai_feedback = analyze_code_chunk(fname, patch_with_lines)
-    
-    for item in ai_feedback:
-        # Enrich with filename
-        item['file'] = fname
-        all_issues.append(item)
+    pr_number = event["pull_request"]["number"]
+    full_sha  = event["pull_request"]["head"]["sha"]
+    repo      = gh.get_repo(REPO_NAME)
+    pr        = repo.get_pull(pr_number)
 
-# Helper: Enrich linter issues with code context if available in patch
-all_issues = enrich_linter_issues(all_issues, patches)
+    dev_name = event["pull_request"]["user"]["login"]
+    title        = event["pull_request"]["title"]
+    url          = event["pull_request"]["html_url"]
+    source_branch = event["pull_request"]["head"]["ref"]
+    target_branch = event["pull_request"]["base"]["ref"]
+    created_at_str = event["pull_request"]["created_at"]
+    commits      = event["pull_request"]["commits"]
+    additions    = event["pull_request"]["additions"]
+    deletions    = event["pull_request"]["deletions"]
 
-# Deduplicate to remove redundant linter/AI overlap
-all_issues = deduplicate_issues(all_issues)
-
-# Sort issues: High severity first
-severity_order = {"High": 0, "Medium": 1, "Low": 2}
-all_issues.sort(key=lambda x: severity_order.get(x.get('severity', 'Low'), 2))
-
-# --- 6) GENERATE RATINGS & COMPONENT STATS ------------------------------
-security_count = sum(1 for i in all_issues if i['type'] == 'Security')
-perf_count = sum(1 for i in all_issues if i['type'] == 'Performance')
-standards_count = sum(1 for i in all_issues if i['type'] == 'Standards')
-# Count actual linter errors (High severity standards)
-linter_error_count = sum(1 for i in linter_issues if i['severity'] == 'High')
-
-# Calculate "Scores" for badges
-def get_badge(label, count, color_good="success", color_bad="critical"):
-    # Use flat-square for cleaner look, less prone to rendering issues
-    # Replace spaces with underscores or %20 if needed, but shields.io handles dashes better
-    safe_label = label.replace(" ", "_")
-    if count == 0:
-        return f"https://img.shields.io/badge/{safe_label}-A--Perfect-{color_good}?style=flat-square&logo=github"
-    elif count < 3:
-        return f"https://img.shields.io/badge/{safe_label}-B--Warnings-yellow?style=flat-square&logo=github"
-    else:
-        return f"https://img.shields.io/badge/{safe_label}-C--Critical-{color_bad}?style=flat-square&logo=github"
-
-badge_sec = get_badge("Security", security_count, "blue", "red")
-badge_perf = get_badge("Performance", perf_count, "green", "orange")
-badge_qual = get_badge("Code_Quality", standards_count, "success", "yellow") # Underscore ensures correct rendering
-
-# Developer Rating Generation
-rating_prompt = (
-    f"Rate this PR based on stats:\\n"
-    f"- Security Issues: {security_count}\\n"
-    f"- Performance Issues: {perf_count}\\n"
-    f"- Standards Issues: {standards_count}\\n"
-    f"- Files: {len(patches)}\\n\\n"
-    "Output specifically:\\n"
-    "1. Star Rating (1-5 stars icons)\\n"
-    "2. A Creative 'Hero Title' (e.g., Code Ninja, Bug Slayer)\\n"
-    "Separated by a pipe symbol |."
-)
-try:
-    rating_resp = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role":"user", "content": rating_prompt}],
-        max_tokens=50
-    )
-    rating_out = rating_resp.choices[0].message.content.strip()
-    if "|" in rating_out:
-        stars, hero_title = rating_out.split("|", 1)
-    else:
-        stars, hero_title = rating_out, "Code Contributor"
-except:
-    stars, hero_title = "***", "Code Contributor"
-
-def get_troll_message(username):
+    # --- Timezone Conversion ---
     try:
-        troll_resp = openai.chat.completions.create(
+        utc_dt = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M:%SZ")
+        utc_dt = pytz.utc.localize(utc_dt)
+        local_tz = pytz.timezone(TARGET_TIMEZONE_NAME)
+        formatted_created_at = utc_dt.astimezone(local_tz).strftime("%B %d, %Y, %I:%M %p %Z")
+    except Exception:
+        formatted_created_at = created_at_str
+
+    # --- 5) EXECUTE ANALYSIS ------------------------------------------------
+    patches = get_file_patches(pr)
+    all_issues = []
+
+    # 5a) Collect Linter Issues
+    linter_issues = collect_linter_issues(patches.keys())
+    all_issues.extend(linter_issues)
+
+    print(f"[INFO] Analyzing {len(patches)} files...")
+
+    for fname, patch in patches.items():
+        # Detect if file is relevant (skip locks, assets, etc.)
+        if any(fname.endswith(ext) for ext in ['.png', '.jpg', '.lock', '.json']):
+            continue
+
+        # Identifiy changed lines (used for validation AND context)
+        changed_lines = parse_patch_lines(patch)
+        if not changed_lines:
+            continue
+
+        # Format patch with line numbers for AI Context (Fixes hallucinated line numbers)
+        # Example: "102: final String url = '...';"
+        patch_with_lines = "\n".join([f"{ln}: {txt}" for ln, txt in changed_lines])
+
+        # Filter linter issues for this file
+        this_file_linter_issues = [i for i in linter_issues if i['file'] == fname]
+
+        # Get AI Feedback
+        ai_feedback = analyze_code_chunk(fname, patch_with_lines, this_file_linter_issues)
+        
+        for item in ai_feedback:
+            # Enrich with filename
+            item['file'] = fname
+            all_issues.append(item)
+
+    # Helper: Enrich linter issues with code context if available in patch
+    all_issues = enrich_linter_issues(all_issues, patches)
+
+    # Deduplicate to remove redundant linter/AI overlap
+    all_issues = deduplicate_issues(all_issues)
+
+    # Sort issues: High severity first
+    severity_order = {"High": 0, "Medium": 1, "Low": 2}
+    all_issues.sort(key=lambda x: severity_order.get(x.get('severity', 'Low'), 2))
+
+    # --- 6) GENERATE RATINGS & COMPONENT STATS ------------------------------
+    security_count = sum(1 for i in all_issues if i['type'] == 'Security')
+    perf_count = sum(1 for i in all_issues if i['type'] == 'Performance')
+    standards_count = sum(1 for i in all_issues if i['type'] == 'Standards')
+    # Count actual linter errors (High severity standards)
+    linter_error_count = sum(1 for i in linter_issues if i['severity'] == 'High')
+
+    # Calculate "Scores" for badges
+    def get_badge(label, count, color_good="success", color_bad="critical"):
+        # Use flat-square for cleaner look, less prone to rendering issues
+        # Replace spaces with underscores or %20 if needed, but shields.io handles dashes better
+        safe_label = label.replace(" ", "_")
+        if count == 0:
+            return f"https://img.shields.io/badge/{safe_label}-A--Perfect-{color_good}?style=flat-square&logo=github"
+        elif count < 3:
+            return f"https://img.shields.io/badge/{safe_label}-B--Warnings-yellow?style=flat-square&logo=github"
+        else:
+            return f"https://img.shields.io/badge/{safe_label}-C--Critical-{color_bad}?style=flat-square&logo=github"
+
+    badge_sec = get_badge("Security", security_count, "blue", "red")
+    badge_perf = get_badge("Performance", perf_count, "green", "orange")
+    badge_qual = get_badge("Code_Quality", standards_count, "success", "yellow") # Underscore ensures correct rendering
+
+    # Developer Rating Generation
+    rating_prompt = (
+        f"Rate this PR based on stats:\\n"
+        f"- Security Issues: {security_count}\\n"
+        f"- Performance Issues: {perf_count}\\n"
+        f"- Standards Issues: {standards_count}\\n"
+        f"- Files: {len(patches)}\\n\\n"
+        "Output specifically:\\n"
+        "1. Star Rating (1-5 stars icons)\\n"
+        "2. A Creative 'Hero Title' (e.g., Code Ninja, Bug Slayer)\\n"
+        "Separated by a pipe symbol |."
+    )
+    try:
+        rating_resp = openai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role":"user", "content": f"Tell one short, hilarious, random office prank or developer joke in 2 lines, possibly referencing a developer named {username}."}],
-            temperature=0.9
+            messages=[{"role":"user", "content": rating_prompt}],
+            max_tokens=50
         )
-        return troll_resp.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Error generating troll message: {e}")
-        return "Why did the developer go broke? Because he used up all his cache!"
+        rating_out = rating_resp.choices[0].message.content.strip()
+        if "|" in rating_out:
+            stars, hero_title = rating_out.split("|", 1)
+        else:
+            stars, hero_title = rating_out, "Code Contributor"
+    except:
+        stars, hero_title = "***", "Code Contributor"
 
-# --- 7) GENERATE MARKDOWN COMMENT ---------------------------------------
-print("[INFO] Generating Hybrid Neural Nexus Comment...")
+    def get_troll_message(username):
+        try:
+            troll_resp = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role":"user", "content": f"Tell one short, hilarious, random office prank or developer joke in 2 lines, possibly referencing a developer named {username}."}],
+                temperature=0.9
+            )
+            return troll_resp.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error generating troll message: {e}")
+            return "Why did the developer go broke? Because he used up all his cache!"
 
-md = []
+    # --- 7) GENERATE MARKDOWN COMMENT ---------------------------------------
+    print("[INFO] Generating Hybrid Neural Nexus Comment...")
 
-# 7a) HEADER & HUD (Executive V2: Hero Rating + Badge Row)
-# Construct Badge URLs for the row
-# Badge format: https://img.shields.io/badge/Label-Value-Color?style=flat-square
+    md = []
 
-def safe_badge_str(s):
-    return str(s).replace("-", "--").replace("_", "__").replace(" ", "_")
+    # 7a) HEADER & HUD (Executive V2: Hero Rating + Badge Row)
+    # Construct Badge URLs for the row
+    # Badge format: https://img.shields.io/badge/Label-Value-Color?style=flat-square
 
-author_safe = safe_badge_str(f"@{pr.user.login}")
-files_safe = safe_badge_str(f"{pr.changed_files} Changed")
+    def safe_badge_str(s):
+        return str(s).replace("-", "--").replace("_", "__").replace(" ", "_")
 
-badge_author = f"https://img.shields.io/badge/Author-{author_safe}-1f2937?style=flat-square&logo=github"
-badge_files = f"https://img.shields.io/badge/Files-{files_safe}-1f2937?style=flat-square"
+    author_safe = safe_badge_str(f"@{pr.user.login}")
+    files_safe = safe_badge_str(f"{pr.changed_files} Changed")
 
-# Generate badges
-b_sec = get_badge('Security', security_count, 'blue', 'orange').replace('style=for-the-badge', 'style=flat-square') 
-b_perf = get_badge('Performance', perf_count).replace('style=for-the-badge', 'style=flat-square')
-b_qual = get_badge('Quality', linter_error_count + standards_count).replace('style=for-the-badge', 'style=flat-square')
+    badge_author = f"https://img.shields.io/badge/Author-{author_safe}-1f2937?style=flat-square&logo=github"
+    badge_files = f"https://img.shields.io/badge/Files-{files_safe}-1f2937?style=flat-square"
 
-md.append(f"\n<div align='center'>")
-md.append(f"  <img src='https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png' height='80' />")
-md.append("  <h2>BrandOptics Neural Nexus</h2>")
-md.append(f"  <h3>{stars} {hero_title}</h3>")
-md.append("  <p><i>'Automated Code Intelligence v3.0'</i></p>")
-md.append(f"  <p>\n    <img src='{badge_author}' />\n    <img src='{badge_files}' />")
-md.append(f"    <img src='{b_sec}' />\n    <img src='{b_perf}' />\n    <img src='{b_qual}' />\n  </p>\n</div>\n")
-md.append("\n---\n")
+    # Generate badges
+    b_sec = get_badge('Security', security_count, 'blue', 'orange').replace('style=for-the-badge', 'style=flat-square') 
+    b_perf = get_badge('Performance', perf_count).replace('style=for-the-badge', 'style=flat-square')
+    b_qual = get_badge('Quality', linter_error_count + standards_count).replace('style=for-the-badge', 'style=flat-square')
 
-# 7b) PR OVERVIEW (From "Old" Bot - Clean Summary)
-# 7b) CRITICAL FOCUS (Immediate Attention)
-top_issues = [i for i in all_issues if i['severity'] == "High"]
-
-if top_issues:
-    md.append("### :rotating_light: Critical Focus\n*Immediate attention required.*")
-    for i in top_issues:
-        fence = get_language_fence(i['file'])
-        md.append(f"> **:red_circle: {i['message']}** in `{i['file']}` at Line {i['line']}\n>")
-        md.append(f"> **Analysis:** {i['analysis']}")
-        md.append(f"> ```{fence}")
-        md.append(f"> {i['suggestion']}")
-        md.append("> ```\n")
+    md.append(f"\n<div align='center'>")
+    md.append(f"  <img src='https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png' height='80' />")
+    md.append("  <h2>BrandOptics Neural Nexus</h2>")
+    md.append(f"  <h3>{stars} {hero_title}</h3>")
+    md.append("  <p><i>'Automated Code Intelligence v3.0'</i></p>")
+    md.append(f"  <p>\n    <img src='{badge_author}' />\n    <img src='{badge_files}' />")
+    md.append(f"    <img src='{b_sec}' />\n    <img src='{b_perf}' />\n    <img src='{b_qual}' />\n  </p>\n</div>\n")
     md.append("\n---\n")
 
-# 7c) Assessment (Only if clean)
-elif not all_issues:
-    md.append("\n### :sparkles: Assessment")
-    md.append("No significant issues found. Great job maintaining code quality!")
+    # 7b) PR OVERVIEW (From "Old" Bot - Clean Summary)
+    # 7b) CRITICAL FOCUS (Immediate Attention)
+    top_issues = [i for i in all_issues if i['severity'] == "High"]
+
+    if top_issues:
+        md.append("### :rotating_light: Critical Focus\n*Immediate attention required.*")
+        for i in top_issues:
+            fence = get_language_fence(i['file'])
+            md.append(f"> **:red_circle: {i['message']}** in `{i['file']}` at Line {i['line']}\n>")
+            md.append(f"> **Analysis:** {i['analysis']}")
+            md.append(f"> ```{fence}")
+            md.append(f"> {i['suggestion']}")
+            md.append("> ```\n")
+        md.append("\n---\n")
+
+    # 7c) Assessment (Only if clean)
+    elif not all_issues:
+        md.append("\n### :sparkles: Assessment")
+        md.append("No significant issues found. Great job maintaining code quality!")
 
 
-# 7d) DETAILED ISSUE BREAKDOWN (Executive V2: Collapsible Files + Detailed Insights)
-if all_issues:
-    md.append("\n## :open_file_folder: File-by-File Analysis")
-    
-    # Group issues by file
-    issues_by_file = {}
-    for i in all_issues:
-        f = i['file']
-        if f not in issues_by_file: issues_by_file[f] = []
-        issues_by_file[f].append(i)
-
-    for filename, file_issues in issues_by_file.items():
-        # Determine icon based on worst severity in file
-        file_icon = ":page_facing_up:"
-        if any(i['severity'] == 'High' for i in file_issues): file_icon = ":red_circle:"
-        elif any(i['severity'] == 'Medium' for i in file_issues): file_icon = ":warning:"
-        
-        # File Collapsible Header
-        md.append(f"\n<details>")
-        md.append(f"<summary><b>{file_icon} {filename}</b> ({len(file_issues)} issues)</summary>\n")
-        
-        # 1. Summary Table
-        md.append("| Line | Type | Issue |")
-        md.append("| :---: | :---: | :--- |")
-        
-        for i in file_issues:
-            # Map type to emoji
-            type_icon = ":large_blue_circle:"
-            if i['type'] == 'Security': type_icon = ":red_circle:"
-            elif i['type'] == 'Performance': type_icon = ":warning:"
-            elif i['type'] == 'Standards': type_icon = ":art:"
-            
-            # Message formatting
-            md.append(f"| {i['line']} | {type_icon} | **{i['message']}** |")
-        
-        md.append("") # End table
-
-        # 2. Detailed Fix & Rationale (Only for rich AI suggestions)
-        # We check if 'suggestion' is substantive (i.e. likely AI-generated, not just a lint placeholder)
-        rich_issues = [i for i in file_issues if i.get('suggestion') and len(i['suggestion']) > 20]
-        
-        if rich_issues:
-            md.append("<blockquote>")
-            md.append("<b>:brain: AI Insights & Fixes</b><br>")
-            
-            for i in rich_issues:
-                fence = get_language_fence(filename)
-                original_blk = ""
-                if i.get('original_code'):
-                    original_blk = f"**Original Code:**\n```{fence}\n{i['original_code']}\n```\n\n"
-                
-                md.append("\n<details>")
-                md.append(f"<summary><b>Line {i['line']}: {i['message']}</b></summary>") 
-                md.append("<br>\n")
-                md.append(f"**Why it matters:**\n{i['analysis']}\n")
-                
-                if original_blk:
-                    md.append(original_blk)
-                    
-                md.append("**Suggested Fix:**")
-                md.append(f"```{fence}")
-                md.append(i['suggestion'])
-                md.append("```\n</details>\n")
-            md.append("</blockquote>")
-
-        md.append("</details>")
-
-            
-
-md.append(f"\n<div align='center'>\n  <sub>Generated by <b>BrandOptics A.I.</b> - <a href='{pr.html_url}'>View PR</a></sub>\n</div>\n")
-
-# --- 8) POST COMMENT ----------------------------------------------------
-final_body = "\n".join(md)
-
-# Only post if there are issues OR it's a "clean run" notification
-# Logic: If 0 issues, we still post the "Success" dashboard.
-try:
-    # Post to GitHub
-    pr.create_issue_comment(final_body)
-    print(f"[SUCCESS] Posted Neural Nexus Review for PR #{pr_number}")
-    
-    # Set Status Check
-    # STRICT MODE: Fail if ANY issue exists (Security, Low/Med/High, Lint)
+    # 7d) DETAILED ISSUE BREAKDOWN (Executive V2: Collapsible Files + Detailed Insights)
     if all_issues:
-        state = "failure"
-        desc = f"Blocker: Found {len(all_issues)} issues. Strict policy enforced."
+        md.append("\n## :open_file_folder: File-by-File Analysis")
+        
+        # Group issues by file
+        issues_by_file = {}
+        for i in all_issues:
+            f = i['file']
+            if f not in issues_by_file: issues_by_file[f] = []
+            issues_by_file[f].append(i)
+
+        for filename, file_issues in issues_by_file.items():
+            # Determine icon based on worst severity in file
+            file_icon = ":page_facing_up:"
+            if any(i['severity'] == 'High' for i in file_issues): file_icon = ":red_circle:"
+            elif any(i['severity'] == 'Medium' for i in file_issues): file_icon = ":warning:"
+            
+            # File Collapsible Header
+            md.append(f"\n<details>")
+            md.append(f"<summary><b>{file_icon} {filename}</b> ({len(file_issues)} issues)</summary>\n")
+            
+            # 1. Summary Table
+            md.append("| Line | Type | Issue |")
+            md.append("| :---: | :---: | :--- |")
+            
+            for i in file_issues:
+                # Map type to emoji
+                type_icon = ":large_blue_circle:"
+                if i['type'] == 'Security': type_icon = ":red_circle:"
+                elif i['type'] == 'Performance': type_icon = ":warning:"
+                elif i['type'] == 'Standards': type_icon = ":art:"
+                
+                # Message formatting
+                md.append(f"| {i['line']} | {type_icon} | **{i['message']}** |")
+            
+            md.append("") # End table
+
+            # 2. Detailed Fix & Rationale (Only for rich AI suggestions)
+            # We check if 'suggestion' is substantive (i.e. likely AI-generated, not just a lint placeholder)
+            rich_issues = [i for i in file_issues if i.get('suggestion') and len(i['suggestion']) > 20]
+            
+            if rich_issues:
+                md.append("<blockquote>")
+                md.append("<b>:brain: AI Insights & Fixes</b><br>")
+                
+                for i in rich_issues:
+                    fence = get_language_fence(filename)
+                    original_blk = ""
+                    if i.get('original_code'):
+                        original_blk = f"**Original Code:**\n```{fence}\n{i['original_code']}\n```\n\n"
+                    
+                    md.append("\n<details>")
+                    md.append(f"<summary><b>Line {i['line']}: {i['message']}</b></summary>") 
+                    md.append("<br>\n")
+                    md.append(f"**Why it matters:**\n{i['analysis']}\n")
+                    
+                    if original_blk:
+                        md.append(original_blk)
+                        
+                    md.append("**Suggested Fix:**")
+                    md.append(f"```{fence}")
+                    md.append(i['suggestion'])
+                    md.append("```\n</details>\n")
+                md.append("</blockquote>")
+
+            md.append("</details>")
+
+                
+
+    md.append(f"\n<div align='center'>\n  <sub>Generated by <b>BrandOptics A.I.</b> - <a href='{pr.html_url}'>View PR</a></sub>\n</div>\n")
+
+    # --- 8) POST COMMENT ----------------------------------------------------
+    final_body = "\n".join(md)
+
+    # Only post if there are issues OR it's a "clean run" notification
+    # Logic: If 0 issues, we still post the "Success" dashboard.
+    try:
+        # Post to GitHub
+        pr.create_issue_comment(final_body)
+        print(f"[SUCCESS] Posted Neural Nexus Review for PR #{pr_number}")
+        
+        # Set Status Check
+        # STRICT MODE: Fail if ANY issue exists (Security, Low/Med/High, Lint)
+        if all_issues:
+            state = "failure"
+            desc = f"Blocker: Found {len(all_issues)} issues. Strict policy enforced."
+        else:
+            state = "success"
+            desc = "All Clear! Neural Nexus approves."
+
+        repo.get_commit(full_sha).create_status(
+            context='brandOptics AI Neural Nexus',
+            state=state,
+            description=desc
+        )
+
+    except Exception as e:
+        print(f"[ERROR] Failed to post comment: {e}")
+        # Print for debug
+        print(final_body)
+
+    # --- 9) EXIT CODE (BLOCK MERGE) ------------------------------------------
+    # Soft Fail: We have already flagged the PR as "failure" in step 8 using create_status.
+    # We do NOT want to fail the Action Runner itself (sys.exit(1)) because that looks like a bot crash.
+    # Instead, we exit(0) so the Action completes "Successfully" (i.e. it successfully found the bugs).
+    if all_issues:
+        print(f"\n[INFO] Strict Policy Enforced: Found {len(all_issues)} issues. PR Status set to 'Failure'.")
+        print("[INFO] Action run completed successfully (Merge blocked via Status Check).")
+        sys.exit(0)
     else:
-        state = "success"
-        desc = "All Clear! Neural Nexus approves."
+        print("\n[SUCCESS] QA PASSED. No issues found.")
+        sys.exit(0)
 
-    repo.get_commit(full_sha).create_status(
-        context='brandOptics AI Neural Nexus',
-        state=state,
-        description=desc
-    )
-
-except Exception as e:
-    print(f"[ERROR] Failed to post comment: {e}")
-    # Print for debug
-    print(final_body)
-
-# --- 9) EXIT CODE (BLOCK MERGE) ------------------------------------------
-# Soft Fail: We have already flagged the PR as "failure" in step 8 using create_status.
-# We do NOT want to fail the Action Runner itself (sys.exit(1)) because that looks like a bot crash.
-# Instead, we exit(0) so the Action completes "Successfully" (i.e. it successfully found the bugs).
-if all_issues:
-    print(f"\n[INFO] Strict Policy Enforced: Found {len(all_issues)} issues. PR Status set to 'Failure'.")
-    print("[INFO] Action run completed successfully (Merge blocked via Status Check).")
-    sys.exit(0)
-else:
-    print("\n[SUCCESS] QA PASSED. No issues found.")
-    sys.exit(0)
+if __name__ == "__main__":
+    main()
