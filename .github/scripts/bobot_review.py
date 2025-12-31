@@ -341,11 +341,46 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
         )
         content = resp.choices[0].message.content
         # Ensure we get a list
-        data = json.loads(content)
+        raw_data = json.loads(content)
         # Handle cases where API returns {"issues": [...]} or just [...]
-        if isinstance(data, dict):
-            return data.get("issues", []) or data.get("result", [])
-        return data if isinstance(data, list) else []
+        data = []
+        if isinstance(raw_data, dict):
+            data = raw_data.get("issues", []) or raw_data.get("result", [])
+        elif isinstance(raw_data, list):
+            data = raw_data
+        
+        # --- FALLBACK: FIXER MODE ---
+        # If the "Architect" mode returned nothing, but we DO have linter issues, 
+        # we must run a simpler "Fixer" mode to generate the mandatory code fixes.
+        if not data and file_linter_issues:
+            print(f"[INFO] Fallback: Running Fixer Mode for {filename}...")
+            fixer_prompt = (
+                f"Fix the following linter errors in `{filename}`. Return JSON only.\\n\\n"
+                f"{linter_context}\\n\\n"
+                f"**Input Code:**\\n```text\\n{patch_content}\\n```\\n\\n"
+                "**Response Format:**\\n"
+                "[ { 'line': <int>, 'type': 'Standards', 'severity': 'Medium', 'message': '<msg>', 'analysis': 'Fixing linter error', 'original_code': '<code>', 'suggestion': '<fixed_code>' } ]"
+            )
+            try:
+                fix_resp = openai.chat.completions.create(
+                    model='gpt-4o',
+                    messages=[
+                        {'role':'system', 'content': "You are a code fixer. Output valid JSON."},
+                        {'role':'user', 'content': fixer_prompt}
+                    ],
+                    temperature=0.1,
+                    response_format={"type": "json_object"}
+                )
+                fix_data = json.loads(fix_resp.choices[0].message.content)
+                if isinstance(fix_data, dict):
+                    data = fix_data.get("issues", []) or fix_data.get("result", [])
+                elif isinstance(fix_data, list):
+                    data = fix_data
+            except Exception as e:
+                print(f"[ERROR] Fixer Mode failed: {e}")
+        
+        return data
+
     except Exception as e:
         print(f"Error analyzing {filename}: {e}")
         return []
