@@ -1,8 +1,8 @@
 name: "brandOptics AI Neural Nexus"
 description: "Runs the brandOptics AI neural-intelligence engine against your PR."
 branding:
-  icon: "zap"
-  color: "green"
+  icon: "shield"
+  color: "gray-dark"
 
 inputs:
   openai_key:

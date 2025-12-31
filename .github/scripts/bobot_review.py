@@ -101,7 +101,7 @@ def collect_linter_issues(changed_files):
                         'severity': 'High' if msg.get('severity', 0) == 2 else 'Medium',
                         'message': f"[ESLint] {msg.get('ruleId', 'Error')}",
                         'analysis': msg.get('message', ''),
-                        'suggestion': "Fix lint violation."
+                        'suggestion': None
                     })
 
     # 2. Flake8 (Python)
@@ -118,7 +118,7 @@ def collect_linter_issues(changed_files):
                         'severity': 'High' if e.get('code', '').startswith('E') else 'Medium', # E=Error, W=Warning
                         'message': f"[Flake8] {e.get('code', 'Error')}",
                         'analysis': e.get('text', ''),
-                        'suggestion': "Fix PEP8 violation."
+                        'suggestion': None
                     })
     
     # 3. Dart Analyzer (Flutter)
@@ -134,7 +134,7 @@ def collect_linter_issues(changed_files):
                     'severity': 'High' if diag.get('severity') == 'ERROR' else 'Medium',
                     'message': f"[Dart] {diag.get('code', 'Issue')}",
                     'analysis': diag.get('problemMessage', ''),
-                    'suggestion': "Fix analysis issue."
+                    'suggestion': None
                 })
 
     # 4. SQLFluff (SQL)
@@ -151,7 +151,7 @@ def collect_linter_issues(changed_files):
                         'severity': 'Medium', # SQLFluff usually outputs warnings
                         'message': f"[SQL] {v.get('code', 'Rule')}",
                         'analysis': v.get('description', ''),
-                        'suggestion': "Fix SQL style violation."
+                        'suggestion': None
                     })
 
     # 5. HTMLHint (HTML)
@@ -167,7 +167,7 @@ def collect_linter_issues(changed_files):
                     'severity': 'High' if item.get('type') == 'error' else 'Medium',
                     'message': f"[HTML] {item.get('rule', {}).get('id', 'Issue')}",
                     'analysis': item.get('message', ''),
-                    'suggestion': "Fix HTML validation error."
+                    'suggestion': None
                 })
 
     # 6. Stylelint (CSS/SCSS)
@@ -184,7 +184,7 @@ def collect_linter_issues(changed_files):
                         'severity': 'High' if w.get('severity') == 'error' else 'Medium',
                         'message': f"[CSS] {w.get('rule', 'Rule')}",
                         'analysis': w.get('text', ''),
-                        'suggestion': "Fix CSS style violation."
+                        'suggestion': None
                     })
 
     # 7. .NET (dotnet-format)
@@ -202,7 +202,7 @@ def collect_linter_issues(changed_files):
                         'severity': 'Medium', # Format issues are usually warnings
                         'message': f"[.NET] {change.get('DiagnosticId', 'Format')}",
                         'analysis': change.get('FormatDescription', 'Code style violation'),
-                        'suggestion': "Apply dotnet format."
+                        'suggestion': None
                     })
 
     return issues
@@ -222,39 +222,43 @@ def enrich_linter_issues(issues, patches):
         # If it's a linter issue (no original_code) and we have the file
         if not i.get('original_code') and i['file'] in file_map:
             line_code = file_map[i['file']].get(i['line'])
-            if line_code:
                 i['original_code'] = line_code.strip()
-                # If suggestion is generic, make it slightly better
-                if i.get('suggestion') in ["Fix analysis issue.", "Fix lint violation.", "Fix PEP8 violation."]:
-                    i['suggestion'] = f"// Fix violation at line {i['line']}: {i['message']}"
+                # Do NOT add generic "Fix violation" comments. User prefers no suggestion over a dummy one.
+                # if i.get('suggestion') in ["Fix analysis issue."...]: ...
 
     return issues
 
-def deduplicate_issues(issues):
+def consolidate_issues(issues):
     """
-    Removes duplicates based on File + Line + Message.
-    Prioritizes issues that have 'suggestion' (AI) over plain linter errors.
+    Advanced Deduplication:
+    1. If a file has a 'Refactoring' issue (from AI), suppress all individual 'Standards' (Linter) issues for that file.
+       Rationale: The Refactoring logic should theoretically cover the linter fixes, and we don't want noise.
+    2. Deduplicate exact string matches.
     """
-    unique_map = {}
-    
+    # 1. Check for files with Refactoring
+    files_with_refactor = set()
     for i in issues:
-        # Create a key. We normalize message to avoid case-sensitivity issues
+        if i.get('type') == 'Refactoring':
+            files_with_refactor.add(i['file'])
+
+    final_issues = []
+    seen_keys = set()
+
+    for i in issues:
+        # Strategy: If file has Refactor, skip "Standards" issues for it.
+        # However, keep 'Security' or 'Performance' as they might be distinct/critical.
+        if i['file'] in files_with_refactor and i.get('type') == 'Standards':
+            continue
+
+        # Normal Deduplication
         key = (i['file'], i['line'], i['message'].strip().lower())
+        if key in seen_keys:
+            continue
         
-        existing = unique_map.get(key)
-        if existing:
-            # Conflict! Decide who stays.
-            # 1. Prefer the one with a 'suggestion' (AI rich content)
-            if i.get('suggestion') and not existing.get('suggestion'):
-                unique_map[key] = i
-            # 2. If both/neither have suggestion, prefer higher severity
-            # (Note: Logic assumes 'High' < 'Medium' in severity dict, but here we just check raw string)
-            elif i.get('severity') == 'High' and existing.get('severity') != 'High':
-                unique_map[key] = i
-        else:
-            unique_map[key] = i
-            
-    return list(unique_map.values())
+        seen_keys.add(key)
+        final_issues.append(i)
+
+    return final_issues
 
 # --- 4) AI ANALYZER -----------------------------------------------------
 def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
@@ -279,9 +283,10 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
         "2. **DUPLICATION & LOGIC:** Actively look for duplicated logic (DRY), infinite loops, off-by-one errors, and improper implementation patterns. If found, suggest a robust fix.\\n"
         "3. **REAL CODE WITH COMMENTS:** Your 'suggestion' field must contain the FIXED CODE. **Crucially**, include brief comments INSIDE the code explaining *why* you made specific changes (e.g., `// Extracted to helper for reuse`).\\n"
         "4. **FORMATTING:** Ensure the code is properly indented and uses newlines. For large methods, do NOT inline everything; use a readable multi-line format.\\n"
-        "5. **Line Numbers:** The input is formatted as `Line: Code`. Return the accurate line number where the issue starts.\\n"
-        "6. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n"
-        "7. **Original Code Context:** When returning `original_code`, you MUST include the line numbers as provided in the input (e.g., `240: int a = 1;`).\\n\\n"
+        "5. **MANDATORY LINTER FIXES:** If you do not provide a 'Refactoring' for a block, you **MUST** provide a specific 'Standards' fix for **EVERY** linter issue listed above. In your suggestion, show the fixed code line(s) with a comment `// Fixed: <issue_message>` above it.\\n"
+        "6. **Line Numbers:** The input is formatted as `Line: Code`. Return the accurate line number where the issue starts.\\n"
+        "7. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n"
+        "8. **Original Code Context:** When returning `original_code`, you MUST include the line numbers as provided in the input (e.g., `240: int a = 1;`).\\n\\n"
 
         "**Focus Areas (SonarWay):**\\n"
         "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
@@ -431,8 +436,8 @@ def main():
     # Helper: Enrich linter issues with code context if available in patch
     all_issues = enrich_linter_issues(all_issues, patches)
 
-    # Deduplicate to remove redundant linter/AI overlap
-    all_issues = deduplicate_issues(all_issues)
+    # Deduplicate and Consolidate: Remove redundant linter/AI overlap
+    all_issues = consolidate_issues(all_issues)
 
     # Sort issues: High severity first
     severity_order = {"High": 0, "Medium": 1, "Low": 2}
