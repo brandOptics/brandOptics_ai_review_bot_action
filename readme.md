@@ -79,7 +79,27 @@ Pull Requests are annotated with a high-fidelity dashboard summarizing the healt
 
 ---
 
-## � Integration
+## 🧠 Core Capabilities & Intelligence
+
+BrandOptics Neural Nexus is not just a linter wrapper; it is a **Hybrid Intelligence Engine** that combines deterministic static analysis with probabilistic LLM reasoning.
+
+### 🛡️ Why Trust This Review?
+*   **Context-Aware Analysis**: Unlike basic bots that only see changed lines, Neural Nexus reads the **Full File Context**. It understands your imports, class definitions, and existing methods, preventing false positives about "undefined variables" or "missing validations."
+*   **Anti-Hallucination Protocols**: strict directives prevent the AI from "guessing" dependencies. If it's not sure, it adheres to specific "Conservative Refactoring" rules.
+*   **Hybrid Verification**: We use standard linters (ESLint, Flake8, Dart Analyzer) as the "Source of Truth" for syntax, and use the AI only to **Fix** them or find deeper Logic/Security issues that linters miss.
+
+### 📏 Review Standards (The "Code Guardian" Protocol)
+The bot enforces a strict "Clean Code" policy based on **SonarWay** and **OWASP** standards:
+
+| Category | Specific Checks & Metrics |
+| :--- | :--- |
+| **Security 🔴** | • **OWASP Top 10** (SQL Injection, XSS, CSRF)<br>• Hardcoded Secrets (API Keys, Tokens)<br>• PII Leaks (Email/Phone exposure) |
+| **Reliability 🟠** | • **Cognitive Complexity**: Flags methods with complexity rating > 15.<br>• **N+1 Queries**: Detects database calls inside loops.<br>• **Resource Leaks**: Unclosed streams/connections. |
+| **Maintainability 🟡** | • **Hard Metrics**: Nesting Depth > 4, Function Params > 7.<br>• **DRY Principle**: Detects copy-pasted code blocks (Junk Code).<br>• **SOLID**: Flags God Classes or tight coupling. |
+
+---
+
+## 🚀 Integration
 
 Deploy Neural Nexus as a standard GitHub Action. Add the following to `.github/workflows/review.yml`:
 
