@@ -4,11 +4,12 @@
   <br />
   
   <h1>BrandOptics Neural Nexus</h1>
-  <h3>Automated Code Intelligence v3.5</h3>
+  <h3>Automated Code Intelligence v3</h3>
 
   <p>
-    <a href="#-core-intelligence">Core Intelligence</a> •
+    <a href="#-core-intelligence">Intelligence</a> •
     <a href="#-capabilities">Capabilities</a> •
+    <a href="#-standards">Standards</a> •
     <a href="#-integration">Integration</a> •
     <a href="#-configuration">Configuration</a>
   </p>
@@ -24,12 +25,13 @@
 
 ## ⚡ Core Intelligence
 
-**Neural Nexus** is an autonomous code quality gate designed for high-velocity engineering teams. Unlike standard linters that merely flag syntax errors, Neural Nexus employs a **Hybrid Neuro-Symbolic Architecture**:
+**Neural Nexus** is not just a linter wrapper; it is a **Hybrid Intelligence Engine** designed for high-velocity engineering teams. Unlike standard bots that merely flag syntax errors, Neural Nexus employs a **Neuro-Symbolic Architecture**:
 
-1.  **Symbolic Logic (Deterministic)**: Executes industry-standard static analysis (ESLint, Flake8, Dart Analyzer, SQLFluff) to catch hard syntax errors and style violations.
+1.  **Symbolic Logic (Deterministic)**: Executes industry-standard static analysis (ESLint, Flake8, Dart Analyzer, SQLFluff) to catch hard syntax errors.
 2.  **Neural Reasoning (Probabilistic)**: Uses sophisticated LLM context windows (GPT-4o) to analyze logic flow, architectural integrity, and security vulnerabilities that static tools miss.
+3.  **Context-Awareness**: Reads the **Full File Source Code** (not just the diff) to understand imports and dependencies, preventing hallucinations about "undefined variables."
 
-This duality ensures **zero-tolerance** for bugs while providing **senior-level refactoring** suggestions for complex logic.
+This duality ensures **zero-tolerance** for bugs while providing **senior-level refactoring** suggestions.
 
 ---
 
@@ -55,6 +57,23 @@ Pull Requests are annotated with a high-fidelity dashboard summarizing the healt
 
 ---
 
+## �️ Trust & Standards
+
+### Why Trust This Review?
+*   **Anti-Hallucination Protocols**: Strict directives prevent the AI from "guessing" dependencies. If it's not sure, it adheres to "Conservative Refactoring" rules.
+*   **Hybrid Verification**: We use standard linters (ESLint, Flake8, Dart Analyzer) as the "Source of Truth" for syntax, and use the AI only to **Fix** them or find deeper Logic/Security issues.
+
+### The "Code Guardian" Protocol
+The bot enforces a strict "Clean Code" policy based on **SonarWay** and **OWASP** standards:
+
+| Category | Specific Checks & Metrics |
+| :--- | :--- |
+| **Security 🔴** | • **OWASP Top 10** (SQL Injection, XSS, CSRF)<br>• Hardcoded Secrets (API Keys, Tokens)<br>• PII Leaks (Email/Phone exposure) |
+| **Reliability 🟠** | • **Cognitive Complexity**: Flags methods with complexity rating > 15.<br>• **N+1 Queries**: Detects database calls inside loops.<br>• **Resource Leaks**: Unclosed streams/connections. |
+| **Maintainability 🟡** | • **Hard Metrics**: Nesting Depth > 4, Function Params > 7.<br>• **DRY Principle**: Detects copy-pasted code blocks (Junk Code).<br>• **SOLID**: Flags God Classes or tight coupling. |
+
+---
+
 ## 🌐 Language Support Matrix
 
 | Ecosystem | Static Analysis | Neural Review | Version Support |
@@ -68,18 +87,7 @@ Pull Requests are annotated with a high-fidelity dashboard summarizing the healt
 
 ---
 
-## 🗺️ Roadmap
-
-- [x] **v3.5**: Mandatory Code Fixes & Deduplication Logic
-- [x] **v3.5**: Enterprise Configuration Rules (Strict)
-- [ ] **v4.0**: Automatic Pull Request Description Generation
-- [ ] **v4.0**: JIRA / Linear Ticket Linking
-- [ ] **v4.5**: Custom LLM Fine-tuning Support (Bring Your Own Model)
-- [ ] **v5.0**: IDE Extensions (VS Code / IntelliJ Plugin)
-
----
-
-## � Integration
+## 🚀 Integration
 
 Deploy Neural Nexus as a standard GitHub Action. Add the following to `.github/workflows/review.yml`:
 
@@ -105,9 +113,11 @@ jobs:
         with:
           openai_key: ${{ secrets.OPENAI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: Model Selection (Default: gpt-4o)
+          # openai_model: "gpt-4-turbo" 
 ```
 
-> **Note**: We recommend pinning to the major version (`@v3`) to receive non-breaking updates automatically. For strict stability, use a specific tag (`@v3.5.0`) or SHA.
+> **Note**: We recommend pinning to the major version (`@v3`) to receive non-breaking updates automatically.
 
 ### Required Secrets
 Navigate to **Settings → Secrets → Actions** and add:
@@ -115,9 +125,12 @@ Navigate to **Settings → Secrets → Actions** and add:
 
 ---
 
-## ⚙️ Configuration Guides
+## ⚙️ Enterprise Configuration Guides
 
 Neural Nexus works out-of-the-box, but for enterprise environments, precise configuration is key. Below are elaborate guides for supported ecosystems.
+
+### [Advanced: Custom Bot Identity & Avatar](./docs/CUSTOM_BOT_SETUP.md)
+Want the bot to post as your own "BrandOptics Bot" app with a custom logo? [Read the Setup Guide](./docs/CUSTOM_BOT_SETUP.md).
 
 ### 1. Flutter & Dart (Mobile)
 For production Flutter apps, you often need to handle private packages and strict linting rules.
@@ -141,10 +154,8 @@ steps:
 ```
 
 **Linting Rules (`analysis_options.yaml`):**
-Place this file in your project root to enforce rules that Neural Nexus will respect and automatically fix.
 ```yaml
 include: package:flutter_lints/flutter.yaml
-
 linter:
   rules:
     # --- ERROR RESILIENCE ---
@@ -155,33 +166,26 @@ linter:
     cancel_subscriptions: true
     close_sinks: true
     control_flow_in_finally: true
-    no_duplicate_case_values: true
-    unrelated_type_equality_checks: true
     
     # --- STYLE & READABILITY ---
     prefer_const_constructors: true
     prefer_final_locals: true
-    prefer_final_parameters: true
-    always_specify_types: true
     camel_case_types: true
-    camel_case_extensions: true
     file_names: true
     
     # --- ARCHITECTURE ---
     await_only_futures: true
     unnecessary_await_in_return: true
     avoid_void_async: true
-    prefer_expression_function_bodies: true
+    discarded_futures: true
     
-    # --- PUBSPEC CHECKS ---
+    # --- DEPENDENCIES ---
     sort_pub_dependencies: true
     package_names: true
 ```
 
----
-
 ### 2. React & TypeScript (Web)
-Ensure your `eslint.config.js` (or `.eslintrc`) is present so Neural Nexus can detect your specific style guide (Airbnb, Standard, etc.).
+Ensure your `eslint.config.js` is present so Neural Nexus can detect your specific style guide.
 
 **Recommended `eslint.config.js`:**
 ```javascript
@@ -201,14 +205,6 @@ export default [
       'react-hooks': reactHooks,
       'jsx-a11y': jsxA11y
     },
-    languageOptions: {
-      parserOptions: {
-        ecmaFeatures: { jsx: true },
-      },
-      globals: {
-        ...globals.browser,
-      }
-    },
     rules: {
       // --- REACT HOOKS (CRITICAL) ---
       'react-hooks/rules-of-hooks': 'error',
@@ -217,27 +213,20 @@ export default [
       // --- BEST PRACTICES ---
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'prefer-const': 'error',
-      'no-var': 'error',
       'eqeqeq': 'error',
-      'no-unused-vars': 'off', // Handled by TS
-      '@typescript-eslint/no-unused-vars': 'error',
       '@typescript-eslint/explicit-function-return-type': 'warn',
       
       // --- ACCESSIBILITY ---
       'jsx-a11y/alt-text': 'error',
-      'jsx-a11y/anchor-has-content': 'error',
       'jsx-a11y/aria-props': 'error',
       
-      // --- REACT IDIOMS ---
-      'react/jsx-boolean-value': 'error',
-      'react/self-closing-comp': 'error',
-      'react/jsx-key': 'error'
+      // --- COMPLEXITY ---
+      'complexity': ["warn", 15],
+      'max-depth': ["warn", 4]
     },
   },
 ];
 ```
-
----
 
 ### 3. Node.js (Backend)
 For Express, NestJS, or raw Node.js services, enforce secure coding practices.
@@ -281,32 +270,22 @@ module.exports = [
 ];
 ```
 
----
-
 ### 4. Python (Data & Backend)
 Neural Nexus checks for PEP8 compliance and cognitive complexity.
 
 **Required `.flake8` Config:**
-Add this to your root to avoid linting virtualenvs or cache files.
 ```ini
 [flake8]
 # --- CORE SETTINGS ---
 max-line-length = 100
 max-complexity = 15
-exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,venv,env,migrations
+exclude = .git,__pycache__,venv,env,migrations
 
-# --- ERROR CODES TO IGNORE (Black Compatible) ---
-# E203: Whitespace before ':'
-# W503: Line break before binary operator
+# --- ERROR CODES ---
+# Ignore Black-incompatible rules
 ignore = E203, W503
-
-# --- ENFORCEMENT ---
-# C901: Function verification complexity
-# F401: Module imported but unused
 select = C,E,F,W,B,B950
 ```
-
----
 
 ### 5. SQL (Database)
 Ensure your queries remain optimized and readable across dialects (Postgres, MySQL, BigQuery).
@@ -338,13 +317,10 @@ capitalisation_policy = upper
 extended_capitalisation_policy = lower
 ```
 
----
-
 ### 6. .NET / C#
 For Enterprise C# applications, we use `dotnet format`.
 
 **Required `root.editorconfig`:**
-Standardize your C# formatting rules.
 ```ini
 root = true
 
@@ -372,6 +348,18 @@ csharp_style_expression_bodied_properties = true:suggestion
 csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
 csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 ```
+
+---
+
+## 🗺️ Roadmap
+
+- [x] **v3.5**: Mandatory Code Fixes & Deduplication Logic
+- [x] **v3.6**: Full Context Awareness (Anti-Hallucination)
+- [x] **v3.6**: 'Fixer Mode' Fallback for simple lint errors
+- [ ] **v4.0**: Automatic Pull Request Description Generation
+- [ ] **v4.0**: JIRA / Linear Ticket Linking
+- [ ] **v4.5**: Custom LLM Fine-tuning Support (Bring Your Own Model)
+- [ ] **v5.0**: IDE Extensions (VS Code / IntelliJ Plugin)
 
 ---
 

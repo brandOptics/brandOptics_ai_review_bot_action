@@ -262,7 +262,7 @@ def consolidate_issues(issues):
     return final_issues
 
 # --- 4) AI ANALYZER -----------------------------------------------------
-def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
+def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_source=None):
     """
     Sends the patch context to AI for deep analysis (Security, Perf, Standards).
     Emulates SonarQube "Clean Code" principles.
@@ -389,13 +389,18 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[]):
 
 def main():
     # --- 1) SETUP ----------------------------------------------------------
-    global OPENAI_API_KEY, GITHUB_TOKEN, REPO_NAME, EVENT_PATH, TARGET_TIMEZONE_NAME, LOGO_URL, openai, gh, pr_number, full_sha, repo, pr
+    global OPENAI_API_KEY, GITHUB_TOKEN, REPO_NAME, EVENT_PATH, TARGET_TIMEZONE_NAME, LOGO_URL, openai, gh, pr_number, full_sha, repo, pr, MODEL_NAME, MODEL_NAME
 
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
     REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
     EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
     TARGET_TIMEZONE_NAME = os.getenv("TARGET_TIMEZONE", "Asia/Kolkata")
+    
+    # Allow user to override model (e.g., 'o1-preview', 'gpt-4-turbo')
+    # Default to 'gpt-4o' which is currently the best balance for coding.
+    # NOTE: 'gpt-5.2' is not yet available via API.
+    MODEL_NAME     = os.getenv("OPENAI_MODEL", "gpt-4o")
 
     # LOGO & BRANDING
     LOGO_URL = "https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png"
@@ -469,8 +474,17 @@ def main():
             # Fallback: Just pass the raw patch if we can't parse lines but need to fix linter
             patch_with_lines = patch
 
+        # Read Full File Content for Context (if available)
+        full_source_text = None
+        try:
+            if os.path.exists(fname):
+                with open(fname, 'r', encoding='utf-8', errors='ignore') as f:
+                    full_source_text = f.read()
+        except Exception:
+            pass
+
         # Get AI Feedback
-        ai_feedback = analyze_code_chunk(fname, patch_with_lines, this_file_linter_issues)
+        ai_feedback = analyze_code_chunk(fname, patch_with_lines, this_file_linter_issues, full_source=full_source_text)
         
         for item in ai_feedback:
             # Enrich with filename
@@ -494,9 +508,32 @@ def main():
     all_issues.sort(key=lambda x: severity_order.get(x.get('severity', 'Low'), 2))
 
     # --- 6) GENERATE RATINGS & COMPONENT STATS ------------------------------
-    security_count = sum(1 for i in all_issues if i['type'] == 'Security')
-    perf_count = sum(1 for i in all_issues if i['type'] == 'Performance')
-    standards_count = sum(1 for i in all_issues if i['type'] == 'Standards')
+    # --- 6) GENERATE RATINGS & COMPONENT STATS ------------------------------
+    # Smart Counting: "Refactoring" issues often hide Security/Perf fixes.
+    # We parse the Refactoring issues to attribute them correctly.
+    
+    security_count = 0
+    perf_count = 0
+    standards_count = 0
+
+    for i in all_issues:
+        t = i.get('type', 'Standards')
+        msg = i.get('message', '').lower()
+        analysis = i.get('analysis', '').lower()
+        full_text = f"{msg} {analysis}"
+
+        # 1. Security
+        if t == 'Security' or 'security' in full_text or 'injection' in full_text or 'xss' in full_text:
+            security_count += 1
+        
+        # 2. Performance
+        elif t == 'Performance' or 'performance' in full_text or 'n+1' in full_text or 'memory' in full_text:
+            perf_count += 1
+        
+        # 3. Code Quality / Standards (Everything else)
+        else:
+            standards_count += 1
+
     # Count actual linter errors (High severity standards)
     linter_error_count = sum(1 for i in linter_issues if i['severity'] == 'High')
 
@@ -668,7 +705,17 @@ def main():
                         
                     md.append("**Suggested Fix:**")
                     md.append(f"```{fence}")
-                    md.append(i['suggestion'])
+                    
+                    # SANITIZATION: Strip existing markdown fences if AI included them
+                    clean_suggestion = i['suggestion'].strip()
+                    if clean_suggestion.startswith("```"):
+                        # Remove first line (fence) and last line (fence) if present
+                        lines = clean_suggestion.splitlines()
+                        if lines[0].startswith("```"): lines = lines[1:]
+                        if lines and lines[-1].startswith("```"): lines = lines[:-1]
+                        clean_suggestion = "\n".join(lines).strip()
+                    
+                    md.append(clean_suggestion)
                     md.append("```\n</details>\n")
                 md.append("</blockquote>")
 
