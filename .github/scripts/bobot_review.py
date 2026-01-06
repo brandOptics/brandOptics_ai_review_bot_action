@@ -498,26 +498,25 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "7. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n"
         "8. **Original Code Context:** When returning `original_code`, you MUST include the line numbers as provided in the input (e.g., `240: int a = 1;`).\\n\\n"
 
-        "**Focus Areas (SonarWay):**\\n"
-        "1. [Security] (SQL Injection, XSS, Hardcoded Secrets, PII Leaks, OWASP Top 10).\\n"
-        "2. [Reliability] (Cognitive Complexity > 15, N+1 queries, unoptimized I/O, resource leaks).\\n"
-        "3. [Maintainability] (Dead code, magic numbers, duplicate blocks, poor naming, massive functions).\\n\\n"
+        "**TIER 1: BLOCKERS (ZERO TOLERANCE) - SEVERITY: HIGH**\\n"
+        "   - **Security Integrity:** SQL/NoSQL Injection, Secrets (API Keys), XSS, Dangerous Execution (eval, implied-eval), PII/PHI Leaks.\\n"
+        "   - **Hardcoding Mandate:** Magic Numbers (assigned to constants), Hardcoded UI Strings (must use i18n), Hardcoded URLs (`http://`, `https://`). \\n"
+        "   - **Professional Hygiene:** Syntax Errors, Unused Variables (Error), Dead Code (Unreachable), Console Logs (except warn/error).\\n"
+        "   - **Strict Equality:** Must use `===` over `==`.\\n\\n"
+        
+        "**TIER 2: WARNINGS (ADVISORY ONLY) - SEVERITY: MEDIUM**\\n"
+        "   - **Complexity:** Cyclomatic Complexity > 20 (IGNORE if < 20). Only warn if TRULY unreadable.\\n"
+        "   - **Duplication:** Exact copy-paste > 15 lines. Small repetition is acceptable.\\n"
+        "   - **Naming:** CamelCase vs SnakeCase inconsistencies (e.g., snake_case in JS, camelCase in Python).\\n"
+        "   - **Performance:** Await inside loops (suggest Promise.all), unindexed DB queries.\\n\\n"
+        
+        "**TIER 3: IGNORED (ZERO NOISE) - DO NOT REPORT**\\n"
+        "   - **Style/Formatting:** Spacing, Tabs, Semicolons, Line Breaks. (Assume Prettier matches).\\n"
+        "   - **Subjective Clean Code:** If logic works, do not suggest 'cleaner' versions.\\n\\n"
 
-        f"{linter_context}\\n\\n"
-
-        "**STRICT STANDARDS TO ENFORCE:**\\n"
-        "A. **Hard Metrics:**\\n"
-        "   - Nesting Depth > 4 levels -> Suggest extraction.\\n"
-        "   - Function Params > 7 -> Suggest Parameter Object.\\n"
-        "   - Cyclomatic Complexity > 10 -> Suggest splitting.\\n\\n"
-        "B. **Naming & Style:**\\n"
-        "   - Variables/Methods: camelCase (JS/Java/Dart), snake_case (Python).\\n"
-        "   - Booleans should have prefixes (is, has, should).\\n\\n"
-        "C. **Architecture & Logic:**\\n"
-        "   - **Fail Fast:** Flag deep if/else nesting; suggest Guard Clauses.\\n"
-        "   - **Error Handling:** Flag empty catch blocks or swallowed errors.\\n"
-        "   - **SOLID:** Flag God Classes (SRP violation) or Tight Coupling.\\n"
-        "   - **DRY:** Flag duplicated logic blocks.\\n\\n"
+        "**GATEKEEPER PROTOCOL:**\\n"
+        "   - **Role:** You are a Level 1 Gatekeeper. Your job is to catch BLOCKERS. Leave complex logic debates to the Human Reviewer.\\n"
+        "   - **Logic Rule:** If code works, pass it. Only flag logic if it is a BUG (Crash, Infinite Loop, Race Condition).\\n\\n"
         
         "**CONTEXT AWARENESS (CRITICAL):**\\n"
         f"1. **Tech Stack:** {stack_info}. Use patterns native to this stack (e.g., if Fastify, don't suggest Express middleware).\\n"
@@ -528,11 +527,14 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "   - If you see a `Controller`, look at the `Project Structure`. If `routes/` exist, assume validation happens there. DO NOT report 'Missing Validation' unless you verify it's missing in the linked Related Files.\\n"
         "   - If looking at a `Service`, assume the Controller passed valid data.\\n\\n"
         
-        "**STABILITY PROTOCOL (NO FLIP-FLOPPING):**\\n"
-        "1. **Respect Existing Patterns:** If the file uses `module.exports`, do NOT suggest ES6 `export`. If it uses `snake_case`, do NOT suggest `camelCase`. Consistency > Idealism.\\n"
-        "2. **Conservative Refactoring:** If code is logical, secure, and performant, DO NOT suggest a rewrite just for style preference. Only flag OBJECTIVE bugs, security risks, or mess.\\n"
-        "3. **Legacy Immunity:** Focus `review` on the PATCH (changed lines). Do not nitpick existing legacy code unless it's a Security Hole.\\n"
-        "4. **Linter Deference:** Ignore formatting/cosmetics (indentation, semicolons). Trust the Linter to handle style. Focus on LOGIC and SECURITY.\\n\\n"
+        "**STABILITY PROTOCOL (NO FLIP-FLOPPING) - STRICT COMPLIANCE REQUIRED:**\\n"
+        "1. **FLAT IS BETTER THAN NESTED:** DO NOT suggest refactoring simple flat guard clauses into nested `if/else` blocks. The developer's flat logic is preferred. Only intervene if the logic is objectively WRONG or INSECURE.\\n"
+        "2. **NO SCHEMA HALLUCINATIONS:** When reviewing schema/validation code (Swagger, Zod, Joi), DO NOT add fields like `nullable: true` or define object properties (e.g., `items: { type: object }`) unless you SEE the definition in the context. If you are not 100% sure, leave it alone.\\n"
+        "3. **Respect Existing Patterns:** If the file uses `module.exports`, do NOT suggest ES6 `export`. If it uses `snake_case`, do NOT suggest `camelCase`. Consistency > Idealism.\\n"
+        "4. **FAULTY LOGIC ONLY:** DO NOT SUGGEST LOGIC CHANGES for code that is working. Only suggest fixes for BROKEN logic, infinite loops, race conditions, or security risks. If it works, leave it alone.\\n"
+        "5. **Conservative Refactoring:** If code is logical, secure, and performant, DO NOT suggest a rewrite just for style preference. Only flag OBJECTIVE bugs, security risks, or mess.\\n"
+        "6. **Legacy Immunity:** Focus `review` on the PATCH (changed lines). Do not nitpick existing legacy code unless it's a Security Hole.\\n"
+        "7. **Linter Deference:** Ignore formatting/cosmetics (indentation, semicolons). Trust the Linter to handle style. Focus on LOGIC and SECURITY.\\n\\n"
         
         f"{related_files}\\n\\n"
 
@@ -972,7 +974,7 @@ def main():
 
                 
 
-    md.append(f"\n<div align='center'>\n  <sub>Generated by <b>BrandOptics A.I.</b> - <a href='{pr.html_url}'>View PR</a></sub>\n</div>\n")
+    md.append(f"\n<div align='center'>\n  <h3>⚖️ Developer Disclaimer</h3>\n  <p><b>This is an automated AI review.</b> Use your judgment.</p>\n  <p>✅ <b>Tier 1 (Blockers):</b> Security & Critical Bugs MUST be fixed.</p>\n  <p>⚠️ <b>Tier 2 (Warnings):</b> Advice only. Fix if it makes sense.</p>\n  <sub>Generated by <b>BrandOptics A.I.</b> - <a href='{pr.html_url}'>View PR</a></sub>\n</div>\n")
 
     # --- 8) POST COMMENT ----------------------------------------------------
     final_body = "\n".join(md)
@@ -985,13 +987,21 @@ def main():
         print(f"[SUCCESS] Posted Neural Nexus Review for PR #{pr_number}")
         
         # Set Status Check
-        # STRICT MODE: Fail if ANY issue exists (Security, Low/Med/High, Lint)
-        if all_issues:
+        # Strict Mode Logic:
+        # - Blockers (High) -> Fail Status (Red X)
+        # - Warnings (Medium) -> Success Status (Green Check) but with comments
+        
+        blockers = [i for i in all_issues if i['severity'] == 'High']
+        
+        if blockers:
             state = "failure"
-            desc = f"Blocker: Found {len(all_issues)} issues. Strict policy enforced."
+            desc = f"❌ Blocked: Found {len(blockers)} Critical Issues. Human Reviewer: DO NOT MERGE until fixed."
+        elif all_issues:
+            state = "success"
+            desc = f"⚠️ Passed (Advisory): {len(all_issues)} notes. Human Reviewer: Verify logic & style."
         else:
             state = "success"
-            desc = "All Clear! Neural Nexus approves."
+            desc = "✅ All Clear. Human Reviewer: Good to go."
 
         repo.get_commit(full_sha).create_status(
             context='brandOptics AI Neural Nexus',
