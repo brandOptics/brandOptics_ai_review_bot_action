@@ -97,16 +97,28 @@ Pull Requests are annotated with a high-fidelity dashboard summarizing the healt
 ### The "Code Guardian" Protocol
 The bot enforces a strict "Clean Code" policy based on **SonarWay** and **OWASP** standards:
 
-### The "Gatekeeper" Tiered Policy (v3.9.0)
-The bot strictly categorizes issues into 3 tiers to reduce noise and block appropriately:
+### The "Strict Gatekeeper" Protocol (15 Commandments)
+The bot enforces **ONLY** these 15 rules. If code violates none of these, it is considered "Safe to Merge".
 
-| Tier | Category | Severity | PR Status |
-| :--- | :--- | :--- | :--- |
-| **Tier 1 🚨** | **BLOCKERS (Zero Tolerance)**<br>• **Security**: SQL Injection, Secrets, XSS, `eval()`<br>• **Hardcoding**: URLs, Magic Numbers, Console Logs (non-error)<br>• **Hygiene**: Syntax Errors, Unused Variables | **High** | **BLOCKED** ❌<br>Must Fix. |
-| **Tier 2 ⚠️** | **WARNINGS (Advisory)**<br>• **Complexity**: Cyclomatic Complexity > 20<br>• **Naming**: Minor convention issues (e.g., CamelCase vs SnakeCase)<br>• **Duplication**: Copy-paste > 15 lines | **Medium** | **PASSED** ✅<br>Just Warnings. |
-| **Tier 3 🔇** | **IGNORED (Zero Noise)**<br>• Formatting (Tabs/Spaces)<br>• Subjective Style preferences<br>• "Clean Code" opinions on working logic | **Low** | **SILENT** 😶<br>No Comments. |
+| Rule | Description |
+| :--- | :--- |
+| **1. Linting Compliance** | Zero tolerance for syntax errors, build failures, or compiler warnings. |
+| **2. Hardcoded UI Strings** | No raw text in UI; must use localization/i18n keys. |
+| **3. Hardcoded Config** | No hardcoded URLs, connections, or paths in logic (use Config/Env). |
+| **4. Secrets Detection** | No committed API keys, passwords, tokens. |
+| **5. Security** | No `eval`, SQL Injection, or Unsafe HTML. |
+| **6. Resource Management** | No unclosed DB connections or streams. |
+| **7. Logging Hygiene** | No `print` or `debug` logs in production. |
+| **8. Dead Code** | No commented-out blocks or unused variables. |
+| **9. Magic Numbers** | No unexplained numeric literals > 10. |
+| **10. Type-Safe Comparisons** | Enforce strict equality (`===`). |
+| **11. Naming (Variables)** | Enforce `camelCase`. |
+| **12. Naming (Classes)** | Enforce `PascalCase`. |
+| **13. Naming (Booleans)** | Check for verb prefix (`is`, `has`, `can`). |
+| **14. Test Integrity** | No skipping tests (`.only`, `@Ignore`). |
+| **15. Dependency Integrity** | Lockfiles must be synced with manifests. |
 
-> **⚖️ Developer Disclaimer**: Every review includes a footer reminding developers that this is an automated tool. Use your judgment. Tier 1 must be fixed, but Tier 2 is advisory.
+> **⛔ Refactoring Banned**: The bot is explicitly forbidden from suggesting "clean code" refactors, logic rewrites, or style changes not listed above.
 
 ---
 
@@ -391,8 +403,10 @@ csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 
 - [x] **v3.5**: Mandatory Code Fixes & Deduplication Logic
 - [x] **v3.6**: Full Context Awareness (Anti-Hallucination)
-- [x] **v3.9**: 3-Tier Gatekeeper Policy (Blocker/Warning/Ignore)
-- [x] **v3.9**: Strict "Faulty Logic Only" Mode
+- [x] **v3.9.0**: 3-Tier Gatekeeper Policy (Blocker/Warning/Ignore)
+- [x] **v3.9.0**: Strict "Faulty Logic Only" Mode
+- [x] **v3.9.1**: Strict 15-Point Checklist & Refactoring Ban
+- [x] **v3.9.1**: Minimalist Developer Disclaimer
 - [x] **v3.6**: 'Fixer Mode' Fallback for simple lint errors
 - [ ] **v4.0**: Automatic Pull Request Description Generation
 - [ ] **v4.0**: JIRA / Linear Ticket Linking

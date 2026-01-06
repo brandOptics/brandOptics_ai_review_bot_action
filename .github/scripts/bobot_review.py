@@ -439,19 +439,15 @@ def consolidate_issues(issues):
        Rationale: The Refactoring logic should theoretically cover the linter fixes, and we don't want noise.
     2. Deduplicate exact string matches.
     """
-    # 1. Check for files with Refactoring
-    files_with_refactor = set()
-    for i in issues:
-        if i.get('type') == 'Refactoring':
-            files_with_refactor.add(i['file'])
-
+    # 1. HARD FILTER: Drop prohibited types
+    # We strictly explicitly DROP 'Refactoring' or 'Clean Code' types as per User Mandate.
     final_issues = []
     seen_keys = set()
-
+    
     for i in issues:
-        # Strategy: If file has Refactor, skip "Standards" issues for it.
-        # However, keep 'Security' or 'Performance' as they might be distinct/critical.
-        if i['file'] in files_with_refactor and i.get('type') == 'Standards':
+        # STRICT TYPE CHECK: Refactoring is BANNED.
+        t = i.get('type', '')
+        if t in ['Refactoring', 'Clean Code']:
             continue
 
         # Normal Deduplication
@@ -463,6 +459,8 @@ def consolidate_issues(issues):
         final_issues.append(i)
 
     return final_issues
+
+
 
 # --- 4) AI ANALYZER -----------------------------------------------------
 def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_source=None, repo_context={}):
@@ -484,57 +482,29 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
              linter_context += f"- Line {i['line']}: [{i['type']}] {i['message']} ({i['analysis']})\n"
 
     prompt = (
-        f"You are an Expert Code Reviewer and Static Analyzer aiming to enforce **SonarQube/SonarWay** Clean Code principles.\\n"
-        f"Analyze the following code changes for file: `{filename}`\\n\\n"
-        "**Goal:** Identify critical issues, code smells, and security hotspots. REFACTOR code to be clean, efficient, and DRY.\\n\\n"
+        "**STRICT PROTOCOL (15 COMMANDMENTS ONLY):**\\n"
+        "You are an Automated Security Gatekeeper. Your job is to strictly enforce these 15 rules. DO NOT suggest refactoring on your own.\\n"
+        "1. **Linting Compliance:** Zero tolerance for syntax errors, build failures, or compiler warnings. (Fix any LINTER issues provided below).\\n"
+        "2. **Hardcoded UI Strings:** No raw text in user interfaces; must use localization/i18n keys.\\n"
+        "3. **Hardcoded Configuration:** No hardcoded URLs, connection strings, or file paths in logic files (use Config/Env).\\n"
+        "4. **Secrets Detection:** No committed API keys, passwords, tokens, or certificate files.\\n"
+        "5. **Security Vulnerabilities:** No use of dangerous functions (eval, SQL injection, unsafe HTML).\\n"
+        "6. **Resource Management:** No unclosed database connections, streams, or missing event listener cleanups.\\n"
+        "7. **Logging Hygiene:** No 'print' statements or debug logs in production code (only standard logging frameworks).\\n"
+        "8. **Dead Code:** No commented-out code blocks, unused variables, or unreachable methods.\\n"
+        "9. **Magic Numbers:** No unexplained numeric literals (must use named constants or enums).\\n"
+        "10. **Type-Safe Comparisons:** Enforce strict equality checks (e.g., === in JS).\\n"
+        "11. **Naming (Variables):** Enforce camelCase for local variables and parameters.\\n"
+        "12. **Naming (Classes):** Enforce PascalCase for Class definitions and Component names.\\n"
+        "13. **Naming (Booleans):** Boolean identifiers must start with a verb (is, has, can, should).\\n"
+        "14. **Test Integrity:** No test skipping or forcing (e.g., .only, @Ignore) committed.\\n"
+        "15. **Dependency Integrity:** Lockfiles must be synced.\\n\\n"
         
-        "**CRITICAL INSTRUCTIONS:**\\n"
-        "1. **REFACTORING OVER REPORTING:** If you see multiple issues (linter errors, style, duplication) in a single function/block, do NOT report them as 10 separate small issues. Report ONE 'Refactoring' issue for the whole function and provide the **COMPLETE REWRITTEN CODE** that fixes all issues.\\n"
-        "2. **DUPLICATION & LOGIC:** Actively look for duplicated logic (DRY), infinite loops, off-by-one errors, and improper implementation patterns. If found, suggest a robust fix.\\n"
-        "3. **REAL CODE WITH COMMENTS:** Your 'suggestion' field must contain the FIXED CODE. **Crucially**, include brief comments INSIDE the code explaining *why* you made specific changes (e.g., `// Extracted to helper for reuse`).\\n"
-        "4. **FORMATTING:** Ensure the code is properly indented and uses newlines. For large methods, do NOT inline everything; use a readable multi-line format.\\n"
-        "5. **MANDATORY LINTER FIXES:** If you do not provide a 'Refactoring' for a block, you **MUST** provide a specific 'Standards' fix for **EVERY** linter issue listed above. In your suggestion, show the fixed code line(s) with a comment `// Fixed: <issue_message>` above it.\\n"
-        "6. **Line Numbers:** The input is formatted as `Line: Code`. Return the accurate line number where the issue starts.\\n"
-        "7. **Comments:** Ignore commented-out code unless it is clearly large blocks of dead execution logic.\\n"
-        "8. **Original Code Context:** When returning `original_code`, you MUST include the line numbers as provided in the input (e.g., `240: int a = 1;`).\\n\\n"
-
-        "**TIER 1: BLOCKERS (ZERO TOLERANCE) - SEVERITY: HIGH**\\n"
-        "   - **Security Integrity:** SQL/NoSQL Injection, Secrets (API Keys), XSS, Dangerous Execution (eval, implied-eval), PII/PHI Leaks.\\n"
-        "   - **Hardcoding Mandate:** Magic Numbers (assigned to constants), Hardcoded UI Strings (must use i18n), Hardcoded URLs (`http://`, `https://`). \\n"
-        "   - **Professional Hygiene:** Syntax Errors, Unused Variables (Error), Dead Code (Unreachable), Console Logs (except warn/error).\\n"
-        "   - **Strict Equality:** Must use `===` over `==`.\\n\\n"
-        
-        "**TIER 2: WARNINGS (ADVISORY ONLY) - SEVERITY: MEDIUM**\\n"
-        "   - **Complexity:** Cyclomatic Complexity > 20 (IGNORE if < 20). Only warn if TRULY unreadable.\\n"
-        "   - **Duplication:** Exact copy-paste > 15 lines. Small repetition is acceptable.\\n"
-        "   - **Naming:** CamelCase vs SnakeCase inconsistencies (e.g., snake_case in JS, camelCase in Python).\\n"
-        "   - **Performance:** Await inside loops (suggest Promise.all), unindexed DB queries.\\n\\n"
-        
-        "**TIER 3: IGNORED (ZERO NOISE) - DO NOT REPORT**\\n"
-        "   - **Style/Formatting:** Spacing, Tabs, Semicolons, Line Breaks. (Assume Prettier matches).\\n"
-        "   - **Subjective Clean Code:** If logic works, do not suggest 'cleaner' versions.\\n\\n"
-
-        "**GATEKEEPER PROTOCOL:**\\n"
-        "   - **Role:** You are a Level 1 Gatekeeper. Your job is to catch BLOCKERS. Leave complex logic debates to the Human Reviewer.\\n"
-        "   - **Logic Rule:** If code works, pass it. Only flag logic if it is a BUG (Crash, Infinite Loop, Race Condition).\\n\\n"
-        
-        "**CONTEXT AWARENESS (CRITICAL):**\\n"
-        f"1. **Tech Stack:** {stack_info}. Use patterns native to this stack (e.g., if Fastify, don't suggest Express middleware).\\n"
-        f"2. **Project Structure:**\\n{repo_map_str}\\n"
-        f"3. **Global Patterns:**\\n{global_patterns}\\n"
-        f"4. **Global Error Handling:** If the Global Context above indicates 'Detected', DO NOT suggest 'try-catch' blocks for purely async error forwarding (the global handler does it). Only suggest local try-catch for specific recovery logic.\\n"
-        f"5. **Architectural Inference:**\\n"
-        "   - If you see a `Controller`, look at the `Project Structure`. If `routes/` exist, assume validation happens there. DO NOT report 'Missing Validation' unless you verify it's missing in the linked Related Files.\\n"
-        "   - If looking at a `Service`, assume the Controller passed valid data.\\n\\n"
-        
-        "**STABILITY PROTOCOL (NO FLIP-FLOPPING) - STRICT COMPLIANCE REQUIRED:**\\n"
-        "1. **FLAT IS BETTER THAN NESTED:** DO NOT suggest refactoring simple flat guard clauses into nested `if/else` blocks. The developer's flat logic is preferred. Only intervene if the logic is objectively WRONG or INSECURE.\\n"
-        "2. **NO SCHEMA HALLUCINATIONS:** When reviewing schema/validation code (Swagger, Zod, Joi), DO NOT add fields like `nullable: true` or define object properties (e.g., `items: { type: object }`) unless you SEE the definition in the context. If you are not 100% sure, leave it alone.\\n"
-        "3. **Respect Existing Patterns:** If the file uses `module.exports`, do NOT suggest ES6 `export`. If it uses `snake_case`, do NOT suggest `camelCase`. Consistency > Idealism.\\n"
-        "4. **FAULTY LOGIC ONLY:** DO NOT SUGGEST LOGIC CHANGES for code that is working. Only suggest fixes for BROKEN logic, infinite loops, race conditions, or security risks. If it works, leave it alone.\\n"
-        "5. **Conservative Refactoring:** If code is logical, secure, and performant, DO NOT suggest a rewrite just for style preference. Only flag OBJECTIVE bugs, security risks, or mess.\\n"
-        "6. **Legacy Immunity:** Focus `review` on the PATCH (changed lines). Do not nitpick existing legacy code unless it's a Security Hole.\\n"
-        "7. **Linter Deference:** Ignore formatting/cosmetics (indentation, semicolons). Trust the Linter to handle style. Focus on LOGIC and SECURITY.\\n\\n"
+        "**NEGATIVE CONSTRAINTS (DO NOT IGNORE):**\\n"
+        "1. **NO REFACORING:** Method refactoring and Logic rewriting are EXPLICITLY BANNED. If code is ugly but works and violates no rule above, LEAVE IT ALONE.\\n"
+        "2. **NO LANGUAGE TRANSLATION:** Do not translate code between languages.\\n"
+        "3. **NO FLUFF:** Do not provide 'Cleaner' alternatives.\\n"
+        "4. **LINTER PRIORITY:** If 'KNOWN LINTER ISSUES' are provided, you MUST suggest a fix for them.\\n\\n"
         
         f"{related_files}\\n\\n"
 
@@ -974,7 +944,7 @@ def main():
 
                 
 
-    md.append(f"\n<div align='center'>\n  <h3>⚖️ Developer Disclaimer</h3>\n  <p><b>This is an automated AI review.</b> Use your judgment.</p>\n  <p>✅ <b>Tier 1 (Blockers):</b> Security & Critical Bugs MUST be fixed.</p>\n  <p>⚠️ <b>Tier 2 (Warnings):</b> Advice only. Fix if it makes sense.</p>\n  <sub>Generated by <b>BrandOptics A.I.</b> - <a href='{pr.html_url}'>View PR</a></sub>\n</div>\n")
+    md.append(f"\n---\n<p align='right'><sub>🤖 <b>BrandOptics Gatekeeper</b>: Tier 1 issues are mandatory blockers. Tier 2 is advisory. Use judgment.</sub></p>\n")
 
     # --- 8) POST COMMENT ----------------------------------------------------
     final_body = "\n".join(md)
