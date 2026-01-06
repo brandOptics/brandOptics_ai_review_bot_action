@@ -486,7 +486,7 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "You are an Automated Security Gatekeeper. Your job is to strictly enforce these 15 rules. DO NOT suggest refactoring on your own.\\n"
         "1. **Linting Compliance:** Zero tolerance for syntax errors, build failures, or compiler warnings. (Fix any LINTER issues provided below).\\n"
         "2. **Hardcoded UI Strings:** No raw text in user interfaces; must use localization/i18n keys. (EXCEPTION: If no i18n detected, IGNORE this rule).\\n"
-        "3. **Hardcoded Configuration:** No hardcoded URLs, connection strings, or file paths in logic files (use Config/Env).\\n"
+        "3. **Hardcoded Configuration:** No hardcoded URLs, connection strings, or file paths in logic files. (EXCEPTION: IGNORE simple logic constants/strings like roles, types, keys).\\n"
         "4. **Secrets Detection:** No committed API keys, passwords, tokens, or certificate files.\\n"
         "5. **Security Vulnerabilities:** No use of dangerous functions (eval, SQL injection, unsafe HTML).\\n"
         "6. **Resource Management & Memory Leaks:** No unclosed database connections, streams, missing event listener cleanups, or memory leaks.\\n"
@@ -501,11 +501,13 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "15. **Dependency Integrity:** Lockfiles must be synced.\\n\\n"
         
         "**NEGATIVE CONSTRAINTS (DO NOT IGNORE):**\\n"
-        "1. **NO REFACORING:** Method refactoring and Logic rewriting are EXPLICITLY BANNED. If code is ugly but works and violates no rule above, LEAVE IT ALONE.\\n"
+        "1. **NO REFACORING:** Method refactoring and Logic rewriting are EXPLICITLY BANNED. If code is ugly but works, LEAVE IT ALONE.\\n"
         "2. **ASSUME LOGIC IS CORRECT:** Do not check for business logic bugs (e.g., faulty conditions, wrong return values). Assume the developer's logic is intentional.\\n"
-        "3. **NO REDUNDANT FIXES:** If your suggested 'fix' is IDENTICAL to the original code, DO NOT return an issue.\\n"
-        "4. **NO FLUFF:** Do not provide 'Cleaner' alternatives.\\n"
-        "5. **LINTER PRIORITY:** If 'KNOWN LINTER ISSUES' are provided, you MUST suggest a fix for them.\\n\\n"
+        "3. **MIDDLEWARE/FLOW IGNORE:** Do not critique middleware placement, control flow, or message output formats.\\n"
+        "4. **ALLOW LOGIC CONSTANTS:** Do NOT flag string literals (e.g., 'admin', 'success', 'user') as Hardcoded Config. Only flag URLs/IPs/Secrets.\\n"
+        "5. **NO REDUNDANT FIXES:** If your suggested 'fix' is IDENTICAL to the original code, DO NOT return an issue.\\n"
+        "6. **SEVERITY CAP:** Only 'Security' and 'Linting' issues can be 'High'. All others must be 'Medium' or 'Low'.\\n"
+        "7. **LINTER PRIORITY:** If 'KNOWN LINTER ISSUES' are provided, you MUST suggest a fix for them.\\n\\n"
         
         f"{related_files}\\n\\n"
 
@@ -856,9 +858,13 @@ def main():
             fence = get_language_fence(i['file'])
             md.append(f"> **:red_circle: {i['message']}** in `{i['file']}` at Line {i['line']}\n>")
             md.append(f"> **Analysis:** {i['analysis']}")
-            md.append(f"> ```{fence}")
-            md.append(f"> {i['suggestion']}")
-            md.append("> ```\n")
+            
+            if i.get('suggestion'):
+                md.append(f"> ```{fence}")
+                md.append(f"> {i['suggestion']}")
+                md.append("> ```\n")
+            else:
+                md.append(">\n")
         md.append("\n---\n")
 
     # 7c) Assessment (Only if clean)

@@ -104,7 +104,7 @@ The bot enforces **ONLY** these 15 rules. If code violates none of these, it is 
 | :--- | :--- |
 | **1. Linting Compliance** | Zero tolerance for syntax errors, build failures, or compiler warnings. |
 | **2. Hardcoded UI Strings** | No raw text in UI; must use localization/i18n keys. *(Ignored if no i18n detected)* |
-| **3. Hardcoded Config** | No hardcoded URLs, connections, or paths in logic (use Config/Env). |
+| **3. Hardcoded Config** | No hardcoded URLs/IPs/Secrets. *(Ignores simple logic constants like 'admin', 'success')* |
 | **4. Secrets Detection** | No committed API keys, passwords, tokens. |
 | **5. Security** | No `eval`, SQL Injection, or Unsafe HTML. |
 | **6. Resource Management** | No leaked connections, streams, or memory leaks. |
