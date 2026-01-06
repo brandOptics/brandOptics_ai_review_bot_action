@@ -432,25 +432,89 @@ def enrich_linter_issues(issues, patches):
 
     return issues
 
+def is_logic_suggestion(issue):
+    """
+    Detects if an issue is a veiled 'Logic/Refactoring' suggestion.
+    """
+    t = issue.get('type', 'Standards')
+    # SAFE TYPES: Security (Critical) and Standards (Linters) are always allowed.
+    if t in ['Security', 'Standards']:
+        return False
+        
+    # TEXT ANALYSIS for other types (Performance, Quality, Refactoring)
+    text = (issue.get('message', '') + " " + issue.get('analysis', '')).lower()
+    
+    # BANNED KEYWORDS: If these appear, it's likely a logic opinion.
+    banned_keywords = [
+        'logic', 'business', 'flow', 'middleware', 'redundant', 
+        'simplify', 'refactor', 'clean', 'structure', 'unnecessary',
+        'readability', 'change', 'rewrite'
+    ]
+    
+    if any(k in text for k in banned_keywords):
+        return True
+        
+    # --- GLOBAL HEURISTIC 1: Universal Import/Module Detection ---
+    # Regex to catch imports in JS, Python, C#, Java, Go, C++
+    # Looks for lines starting with 'import', 'include', 'require', 'using', 'package', 'from'
+    if re.search(r'^\s*(import|using|require|include|from|package|export)\b', original_code):
+        # If it's an import, it CANNOT be a Magic Number or Secret (usually)
+        # We might have "Hardcoded" on imports (e.g. from '...'), but user specifically hates these checks on imports.
+        if t in ['Security', 'Secrets Detection', 'Hardcoded Configuration', 'Magic Numbers']:
+             return True
+
+    # --- GLOBAL HEURISTIC 2: Benign Magic Numbers ---
+    # If the issue is about "Magic Numbers", we filter out common valid use cases globally.
+    if 'magic number' in issue.get('message', '').lower() or t == 'Magic Numbers':
+         # 2a. Small Integers (-1 to 10), Common Powers of 2, Common HTTP, Common 100s
+         # We look for ANY number in the line. If all numbers found are "benign", we drop the issue.
+         numbers_found = re.findall(r'\b\d+\b', original_code)
+         
+         is_benign = True
+         if not numbers_found:
+             is_benign = True # No numbers? Then definitely a hallucination.
+         else:
+             for num_str in numbers_found:
+                 try:
+                     n = int(num_str)
+                     # Benign Set: 0-10, 100, 1000, 200/400/404/500 (HTTP), Powers of 2
+                     if not ( (-1 <= n <= 10) or n in [100, 1000, 200, 201, 204, 400, 401, 403, 404, 500] or (n > 0 and (n & (n-1) == 0) and n <= 4096) ):
+                         is_benign = False # Found a "weird" number (e.g. 87)
+                         break
+                 except:
+                     pass
+         
+         if is_benign:
+             return True
+             
+         # 2b. Array Indices and Math Operations (universal)
+         # [0], [1] -> Array index
+         # + 1, - 1, * 100 -> Math
+         # > 0, < 1 -> Comparisons
+         if re.search(r'\[\s*\d+\s*\]', original_code): return True # Array index
+         if re.search(r'[-+*/%]\s*\d+', original_code): return True # Math op
+         if re.search(r'[=!<>]=\s*\d+', original_code): return True # Comparison
+             
+    return False
+
 def consolidate_issues(issues):
     """
-    Advanced Deduplication:
-    1. If a file has a 'Refactoring' issue (from AI), suppress all individual 'Standards' (Linter) issues for that file.
-       Rationale: The Refactoring logic should theoretically cover the linter fixes, and we don't want noise.
-    2. Deduplicate exact string matches.
+    Advanced Deduplication & Filtering.
     """
-    # 1. HARD FILTER: Drop prohibited types
-    # We strictly explicitly DROP 'Refactoring' or 'Clean Code' types as per User Mandate.
     final_issues = []
     seen_keys = set()
     
     for i in issues:
-        # STRICT TYPE CHECK: Refactoring is BANNED.
-        t = i.get('type', '')
-        if t in ['Refactoring', 'Clean Code']:
+        # 1. HARD FILTER: Drop 'Refactoring' type explicitly
+        if i.get('type') in ['Refactoring', 'Clean Code']:
+            continue
+            
+        # 2. CODE FIREWALL: Drop Logic Suggestions disguised as other types
+        if is_logic_suggestion(i):
+            print(f"[FIREWALL] Dropped Logic Suggestion: {i.get('message')}")
             continue
 
-        # Normal Deduplication
+        # 3. Deduplication
         key = (i['file'], i['line'], i['message'].strip().lower())
         if key in seen_keys:
             continue
@@ -487,12 +551,12 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "1. **Linting Compliance:** Zero tolerance for syntax errors, build failures, or compiler warnings. (Fix any LINTER issues provided below).\\n"
         "2. **Hardcoded UI Strings:** No raw text in user interfaces; must use localization/i18n keys. (EXCEPTION: If no i18n detected, IGNORE this rule).\\n"
         "3. **Hardcoded Configuration:** No hardcoded URLs, connection strings, or file paths in logic files. (EXCEPTION: IGNORE simple logic constants/strings like roles, types, keys).\\n"
-        "4. **Secrets Detection:** No committed API keys, passwords, tokens, or certificate files.\\n"
+        "4. **Secrets Detection:** No committed API keys, passwords, tokens, or certificate files. (IGNORE imports/requires).\\n"
         "5. **Security Vulnerabilities:** No use of dangerous functions (eval, SQL injection, unsafe HTML).\\n"
         "6. **Resource Management & Memory Leaks:** No unclosed database connections, streams, missing event listener cleanups, or memory leaks.\\n"
         "7. **Logging Hygiene:** No 'print' statements or debug logs in production code (only standard logging frameworks).\\n"
         "8. **Dead Code:** No commented-out code blocks, unused variables, or unreachable methods.\\n"
-        "9. **Magic Numbers:** No unexplained numeric literals (must use named constants or enums).\\n"
+        "9. **Magic Numbers:** No unexplained numeric literals (must use named constants or enums). (EXCEPTION: IGNORE 0, 1, -1, 100).\\n"
         "10. **Type-Safe Comparisons:** Enforce strict equality checks (e.g., === in JS).\\n"
         "11. **Naming (Variables):** Enforce camelCase for local variables and parameters.\\n"
         "12. **Naming (Classes):** Enforce PascalCase for Class definitions and Component names.\\n"
@@ -506,8 +570,10 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "3. **MIDDLEWARE/FLOW IGNORE:** Do not critique middleware placement, control flow, or message output formats.\\n"
         "4. **ALLOW LOGIC CONSTANTS:** Do NOT flag string literals (e.g., 'admin', 'success', 'user') as Hardcoded Config. Only flag URLs/IPs/Secrets.\\n"
         "5. **NO REDUNDANT FIXES:** If your suggested 'fix' is IDENTICAL to the original code, DO NOT return an issue.\\n"
-        "6. **SEVERITY CAP:** Only 'Security' and 'Linting' issues can be 'High'. All others must be 'Medium' or 'Low'.\\n"
-        "7. **LINTER PRIORITY:** If 'KNOWN LINTER ISSUES' are provided, you MUST suggest a fix for them.\\n\\n"
+        "6. **NO IMPORT STYLING:** Do not suggest changing relative paths to absolute paths or vice versa. Ignore module organization.\\n"
+        "7. **NO IMPLEMENTATION GUESSING:** If a linter error says 'undefined function', do not write the function logic. Just suggest importing it.\\n"
+        "8. **SEVERITY CAP:** Only 'Security' and 'Linting' issues can be 'High'. All others must be 'Medium' or 'Low'.\\n"
+        "9. **LINTER PRIORITY:** If 'KNOWN LINTER ISSUES' are provided, you MUST suggest a fix for them.\\n\\n"
         
         f"{related_files}\\n\\n"
 
@@ -530,7 +596,10 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "        }\\n"
         "    ]\\n"
         "}\\n\\n"
-        "**FINAL MANDATE:** If 'KNOWN LINTER ISSUES' were provided in the prompt, you **MUST** return at least one issue (either a 'Refactoring' that solves them all, or individual 'Standards' fixes). Do NOT return specific issues if there are none.\\n"
+        "**FINAL MANDATE:**\n"
+        "1. If 'KNOWN LINTER ISSUES' are present -> You MUST fix them.\n"
+        "2. If NO 'Security' or 'Linting' issues are found -> OUTPUT `{\"issues\": []}`.\n"
+        "3. DO NOT invent 'Medium' or 'Low' issues just to be helpful. Silence is better than noise.\n"
     )
 
     try:
