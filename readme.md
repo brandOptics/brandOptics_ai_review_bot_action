@@ -35,6 +35,37 @@ This duality ensures **zero-tolerance** for bugs while providing **senior-level 
 
 ---
 
+## 🧠 How the Review Works
+
+Neural Nexus simulates a Senior Software Architect's workflow through a **Multi-Stage Pipeline**:
+
+### 1. Discovery & Context Assembly (The "Brain")
+Before analyzing code, the bot builds a mental model of your project:
+- **Structure Scanning**: Identifies MVC patterns, Clean Architecture layers, and feature groupings.
+- **Stack Detection**: Automatically detects Node.js, Python, Java, Go, etc., to enforce language-specific idioms.
+- **Global Pattern Recognition**: Detects existing logic (e.g., Global Error Handlers, Auth Middleware) to avoid redundant suggestions.
+
+### 2. "Smart Context" Fetcher (Anti-Hallucination)
+For every file changed in a PR, the bot fetches the **Full Context** of its dependencies:
+- **Dependency Tracing**: If `OrderController.js` is modified, it reads imports to find `OrderService.js`.
+- **Full Content Reading**: Reads the **entire content** of related files to ensure it knows exact function signatures.
+- **Priority Injection**: Forcefully injects `utils`, `types`, and `interfaces` to prevent hallucinated types.
+
+### 3. Linter Integration (The "Rules")
+Feeds real static analysis errors (ESLint, Sonar, etc.) into the AI with a strict mandate: **"Fix these known issues."** This ensures the bot doesn't just "chat" but resolves blocking errors.
+
+### 4. Architect Analysis (The "Review")
+The AI (GPT-4o) assumes the persona of a Senior Architect enforcing **SonarWay** Clean Code principles:
+- **Refactor over Complaint**: Instead of leaving 10 comments, it rewrites the function to be clean.
+- **Security First**: Actively hunts for Injection, XSS, and PII leaks.
+- **DRY Enforcement**: Flags and refactors duplicated logic.
+
+### 5. Synthesis & Scoring
+- **Deduplication**: Suppresses linter errors if the AI's refactoring already fixes them.
+- **Scoring**: Calculates a "Health Score" (A/B/C) based on issue severity.
+
+---
+
 ## 🎯 Capabilities
 
 ### 1. Auto-Refactoring & Duplication Detection

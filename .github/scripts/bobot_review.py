@@ -29,8 +29,211 @@ def get_language_fence(filename):
     }
     return mapping.get(ext, '')
 
+# --- 2) CONTEXT & ARCHITECTURE DISCOVERY --------------------------------
 
-# --- 3) PATCH PARSING & CONTEXT -----------------------------------------
+def generate_repo_map(root=".", max_depth=4, allowed_exts=None):
+    """
+    Generates a concise file tree of the repository for AI context.
+    """
+    if allowed_exts is None:
+        allowed_exts = {
+            '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.go', '.rb', '.php', 
+            '.cs', '.dart', '.swift', '.kt', '.rs', '.c', '.cpp', '.h', '.hpp',
+            '.sql', '.vue', '.html', '.css', '.scss'
+        }
+    
+    file_list = []
+    ignore_dirs = {'.git', 'node_modules', 'dist', 'build', 'coverage', '__pycache__', '.github', '.idea', '.vscode', 'vendor'}
+    
+    for r, dirs, files in os.walk(root):
+        # Clean ignore dirs
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+        
+        depth = r[len(root):].count(os.sep)
+        if depth > max_depth:
+            continue
+            
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in allowed_exts:
+                path = os.path.relpath(os.path.join(r, f), root)
+                file_list.append(path)
+                
+    return file_list
+
+def get_project_stack_info(root="."):
+    """
+    Detects the tech stack based on manifest files and structure.
+    """
+    stack_hints = []
+    
+    # Check Manifests
+    if os.path.exists(os.path.join(root, 'package.json')):
+        try:
+            with open(os.path.join(root, 'package.json')) as f:
+                pkg = json.load(f)
+                deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
+                
+                frameworks = []
+                if 'react' in deps: frameworks.append('React')
+                if 'next' in deps: frameworks.append('Next.js')
+                if 'vue' in deps: frameworks.append('Vue')
+                if 'express' in deps: frameworks.append('Express.js')
+                if 'fastify' in deps: frameworks.append('Fastify')
+                if 'nest.js' in deps or '@nestjs/core' in deps: frameworks.append('NestJS')
+                
+                stack_hints.append(f"Node.js ({', '.join(frameworks)})")
+        except:
+            pass
+
+    if os.path.exists(os.path.join(root, 'go.mod')):
+        stack_hints.append("Go")
+    
+    if os.path.exists(os.path.join(root, 'pom.xml')) or os.path.exists(os.path.join(root, 'build.gradle')):
+        stack_hints.append("Java/Kotlin (Spring/Gradle/Maven)")
+        
+    if os.path.exists(os.path.join(root, 'requirements.txt')) or os.path.exists(os.path.join(root, 'pyproject.toml')):
+        stack_hints.append("Python")
+        
+    if os.path.exists(os.path.join(root, 'Cargo.toml')):
+        stack_hints.append("Rust")
+
+    if os.path.exists(os.path.join(root, 'Gemfile')):
+        stack_hints.append("Ruby")
+        
+    if os.path.exists(os.path.join(root, 'composer.json')):
+        stack_hints.append("PHP")
+
+    # Structure Heuristics
+    if os.path.exists(os.path.join(root, 'app', 'controllers')):
+        stack_hints.append("MVC Structure (Rails/Laravel style)")
+    if os.path.exists(os.path.join(root, 'src', 'main', 'java')):
+        stack_hints.append("Standard Java Structure")
+
+    if not stack_hints:
+        return "Generic/Unknown Stack"
+    
+    return " | ".join(stack_hints)
+
+def scan_global_patterns(repo_map, root="."):
+    """
+    Scans for global architectural patterns (Global Error Handling, Auth Middleware).
+    Returns a summary string.
+    """
+    detected_patterns = []
+    
+    # Universal Keywords
+    # Format: (Label, Regex Pattern, File Extensions)
+    checks = [
+        ("Global Error Handling (JS/TS)", r"(app\.use\(.*error|setErrorHandler|process\.on\('uncaughtException')", ('.js', '.ts')),
+        ("Global Error Handling (Java)", r"@ControllerAdvice|@ExceptionHandler", ('.java',)),
+        ("Global Error Handling (Python)", r"@.*\.errorhandler|process_exception", ('.py',)),
+        ("Global Error Handling (Go)", r"recover\(\)", ('.go',)),
+        ("Global Error Handling (C#)", r"UseExceptionHandler", ('.cs',)),
+        ("Auth Middleware", r"(passport\.authenticate|jwt\.verify|@Authorized|@PreAuthorize|login_required)", ('.js', '.ts', '.java', '.py', '.go'))
+    ]
+
+    for label, pattern, exts in checks:
+        # Optimization: Only check relevant files, and max 20 files per extension to avoid slowness
+        candidates = [f for f in repo_map if any(f.endswith(e) for e in exts)]
+        # Heuristic: Check "likely" files first (app, server, main, auth, middleware)
+        candidates.sort(key=lambda x: 0 if any(k in x.lower() for k in ['app', 'server', 'main', 'config', 'auth', 'middleware']) else 1)
+        
+        found = False
+        re_pat = re.compile(pattern, re.IGNORECASE)
+        
+        for fname in candidates[:20]: # Check max 20 likely files
+            try:
+                with open(os.path.join(root, fname), 'r', errors='ignore') as f:
+                    content = f.read(10000) # Read first 10k bytes
+                    if re_pat.search(content):
+                        detected_patterns.append(f"{label} (Detected in {fname})")
+                        found = True
+                        break
+            except:
+                continue
+        
+        if not found and "Error Handling" in label:
+             detected_patterns.append(f"{label}: NOT DETECTED (Be Strict on local try-catch)")
+
+    return "\n".join(detected_patterns)
+
+def get_feature_context(target_file, full_content, repo_map, root="."):
+    """
+    Intelligent Context Fetcher:
+    1. Analyzes IMPORTS to find direct dependencies.
+    2. Analyzes filename STEM matches to find related MVC files.
+    3. Returns FULL CONTENT of the most relevant files (Top 10).
+    """
+    context_files = set()
+    base_name = os.path.basename(target_file)
+    name_stem = os.path.splitext(base_name)[0]
+    
+    # Remove common suffixes to get the "Feature Name"
+    for suffix in ['.controller', '.service', '.routes', '.model', '.dto', 'Controller', 'Service', 'Repository', 'Dto']:
+        if name_stem.endswith(suffix):
+            name_stem = name_stem.replace(suffix, '')
+    
+    name_stem = name_stem.lower()
+    
+    # 1. STEM MATCHING
+    if len(name_stem) > 3:
+        for f in repo_map:
+            f_lower = os.path.basename(f).lower()
+            if name_stem in f_lower and f != target_file:
+                context_files.add(f)
+                
+    # 2. IMPORT ANALYSIS
+    # Boost files that are explicitly imported
+    imported_files = set()
+    if full_content:
+        import_paths = re.findall(r'''(?:from|import|require)\s*\(?['"]([.@][^'"]+)['"]''', full_content)
+        for path in import_paths:
+            clean_path = os.path.basename(path)
+            for f in repo_map:
+                if clean_path in f:
+                    context_files.add(f)
+                    imported_files.add(f)
+
+    # 3. SELECT & READ FULL CONTENT
+    # Priority: Explicit Imports > Routes/Services > Utils/Models
+    def priority_score(f):
+        score = 0
+        f_lower = f.lower()
+        
+        # Explicit imports get a massively high score to ensure they are included
+        if f in imported_files:
+            score += 50
+            
+        if 'route' in f_lower: score += 10
+        elif 'service' in f_lower: score += 8
+        elif 'model' in f_lower or 'entity' in f_lower: score += 6
+        # Boost Utils/Types/Interfaces as they are critical for preventing hallucinations
+        elif 'util' in f_lower or 'helper' in f_lower: score += 9 
+        elif 'type' in f_lower or 'interface' in f_lower or 'dto' in f_lower: score += 9
+        else: score += 1
+        
+        return score
+        
+    # Sort by priority and take Top 10 (increased from 3)
+    sorted_files = sorted(list(context_files), key=priority_score, reverse=True)[:10]
+    
+    snippets = []
+    for f in sorted_files:
+        try:
+            full_path = os.path.join(root, f)
+            # Safety: Skip massive files (>100KB) to prevent context explosion
+            if os.path.getsize(full_path) > 100 * 1024:
+                snippets.append(f"--- RELATED FILE: {f} (SKIPPED - TOO LARGE) ---\n")
+                continue
+
+            with open(full_path, 'r', errors='ignore') as file_obj:
+                content = file_obj.read()
+                snippets.append(f"--- RELATED FILE: {f} ---\n{content}\n")
+        except:
+            pass
+            
+    return "\n".join(snippets)
 def get_file_patches(pr_obj):
     """
     Retrieves patches for all changed files (excluding .github/ folder).
@@ -262,11 +465,17 @@ def consolidate_issues(issues):
     return final_issues
 
 # --- 4) AI ANALYZER -----------------------------------------------------
-def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_source=None):
+def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_source=None, repo_context={}):
     """
     Sends the patch context to AI for deep analysis (Security, Perf, Standards).
-    Emulates SonarQube "Clean Code" principles.
+    Emulates SonarQube "Clean Code" principles with Context Awareness.
     """
+    # Unpack Context
+    repo_map_str = "\n".join(repo_context.get('repo_map', [])[:200]) # Limit to top 200 files
+    stack_info = repo_context.get('stack_info', 'Unknown')
+    global_patterns = repo_context.get('global_patterns', 'None')
+    related_files = repo_context.get('related_context', '')
+
     # Format linter issues for the prompt
     linter_context = ""
     if file_linter_issues:
@@ -309,6 +518,23 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
         "   - **Error Handling:** Flag empty catch blocks or swallowed errors.\\n"
         "   - **SOLID:** Flag God Classes (SRP violation) or Tight Coupling.\\n"
         "   - **DRY:** Flag duplicated logic blocks.\\n\\n"
+        
+        "**CONTEXT AWARENESS (CRITICAL):**\\n"
+        f"1. **Tech Stack:** {stack_info}. Use patterns native to this stack (e.g., if Fastify, don't suggest Express middleware).\\n"
+        f"2. **Project Structure:**\\n{repo_map_str}\\n"
+        f"3. **Global Patterns:**\\n{global_patterns}\\n"
+        f"4. **Global Error Handling:** If the Global Context above indicates 'Detected', DO NOT suggest 'try-catch' blocks for purely async error forwarding (the global handler does it). Only suggest local try-catch for specific recovery logic.\\n"
+        f"5. **Architectural Inference:**\\n"
+        "   - If you see a `Controller`, look at the `Project Structure`. If `routes/` exist, assume validation happens there. DO NOT report 'Missing Validation' unless you verify it's missing in the linked Related Files.\\n"
+        "   - If looking at a `Service`, assume the Controller passed valid data.\\n\\n"
+        
+        "**STABILITY PROTOCOL (NO FLIP-FLOPPING):**\\n"
+        "1. **Respect Existing Patterns:** If the file uses `module.exports`, do NOT suggest ES6 `export`. If it uses `snake_case`, do NOT suggest `camelCase`. Consistency > Idealism.\\n"
+        "2. **Conservative Refactoring:** If code is logical, secure, and performant, DO NOT suggest a rewrite just for style preference. Only flag OBJECTIVE bugs, security risks, or mess.\\n"
+        "3. **Legacy Immunity:** Focus `review` on the PATCH (changed lines). Do not nitpick existing legacy code unless it's a Security Hole.\\n"
+        "4. **Linter Deference:** Ignore formatting/cosmetics (indentation, semicolons). Trust the Linter to handle style. Focus on LOGIC and SECURITY.\\n\\n"
+        
+        f"{related_files}\\n\\n"
 
         "**Input (Line: Code):**\\n"
         "```text\\n"
@@ -441,6 +667,24 @@ def main():
         formatted_created_at = created_at_str
 
     # --- 5) EXECUTE ANALYSIS ------------------------------------------------
+    
+    # 5.0) Generate Global Context ONCE
+    print("[INFO] Generating Repository Context Map & Stack Info...")
+    cwd = os.getcwd()
+    file_tree = generate_repo_map(cwd)
+    stack_info_str = get_project_stack_info(cwd)
+    global_patterns_str = scan_global_patterns(file_tree, cwd)
+    
+    print(f"[INFO] Stack Detected: {stack_info_str}")
+    print(f"[INFO] Global Patterns: {global_patterns_str}")
+    
+    repo_context_payload = {
+        'repo_map': file_tree,
+        'stack_info': stack_info_str,
+        'global_patterns': global_patterns_str,
+        # 'related_context': ... (computed per file)
+    }
+
     patches = get_file_patches(pr)
     all_issues = []
 
@@ -484,7 +728,12 @@ def main():
             pass
 
         # Get AI Feedback
-        ai_feedback = analyze_code_chunk(fname, patch_with_lines, this_file_linter_issues, full_source=full_source_text)
+        
+        # 5.1 Fetch Related Context specific to this file
+        current_context = repo_context_payload.copy()
+        current_context['related_context'] = get_feature_context(fname, full_source_text, file_tree, cwd)
+        
+        ai_feedback = analyze_code_chunk(fname, patch_with_lines, this_file_linter_issues, full_source=full_source_text, repo_context=current_context)
         
         for item in ai_feedback:
             # Enrich with filename
