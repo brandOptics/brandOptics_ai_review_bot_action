@@ -97,11 +97,16 @@ Pull Requests are annotated with a high-fidelity dashboard summarizing the healt
 ### The "Code Guardian" Protocol
 The bot enforces a strict "Clean Code" policy based on **SonarWay** and **OWASP** standards:
 
-| Category | Specific Checks & Metrics |
-| :--- | :--- |
-| **Security 🔴** | • **OWASP Top 10** (SQL Injection, XSS, CSRF)<br>• Hardcoded Secrets (API Keys, Tokens)<br>• PII Leaks (Email/Phone exposure) |
-| **Reliability 🟠** | • **Cognitive Complexity**: Flags methods with complexity rating > 15.<br>• **N+1 Queries**: Detects database calls inside loops.<br>• **Resource Leaks**: Unclosed streams/connections. |
-| **Maintainability 🟡** | • **Hard Metrics**: Nesting Depth > 4, Function Params > 7.<br>• **DRY Principle**: Detects copy-pasted code blocks (Junk Code).<br>• **SOLID**: Flags God Classes or tight coupling. |
+### The "Gatekeeper" Tiered Policy (v3.9.0)
+The bot strictly categorizes issues into 3 tiers to reduce noise and block appropriately:
+
+| Tier | Category | Severity | PR Status |
+| :--- | :--- | :--- | :--- |
+| **Tier 1 🚨** | **BLOCKERS (Zero Tolerance)**<br>• **Security**: SQL Injection, Secrets, XSS, `eval()`<br>• **Hardcoding**: URLs, Magic Numbers, Console Logs (non-error)<br>• **Hygiene**: Syntax Errors, Unused Variables | **High** | **BLOCKED** ❌<br>Must Fix. |
+| **Tier 2 ⚠️** | **WARNINGS (Advisory)**<br>• **Complexity**: Cyclomatic Complexity > 20<br>• **Naming**: Minor convention issues (e.g., CamelCase vs SnakeCase)<br>• **Duplication**: Copy-paste > 15 lines | **Medium** | **PASSED** ✅<br>Just Warnings. |
+| **Tier 3 🔇** | **IGNORED (Zero Noise)**<br>• Formatting (Tabs/Spaces)<br>• Subjective Style preferences<br>• "Clean Code" opinions on working logic | **Low** | **SILENT** 😶<br>No Comments. |
+
+> **⚖️ Developer Disclaimer**: Every review includes a footer reminding developers that this is an automated tool. Use your judgment. Tier 1 must be fixed, but Tier 2 is advisory.
 
 ---
 
@@ -386,6 +391,8 @@ csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 
 - [x] **v3.5**: Mandatory Code Fixes & Deduplication Logic
 - [x] **v3.6**: Full Context Awareness (Anti-Hallucination)
+- [x] **v3.9**: 3-Tier Gatekeeper Policy (Blocker/Warning/Ignore)
+- [x] **v3.9**: Strict "Faulty Logic Only" Mode
 - [x] **v3.6**: 'Fixer Mode' Fallback for simple lint errors
 - [ ] **v4.0**: Automatic Pull Request Description Generation
 - [ ] **v4.0**: JIRA / Linear Ticket Linking
