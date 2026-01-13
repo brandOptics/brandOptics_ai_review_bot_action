@@ -197,10 +197,32 @@ steps:
       git config --global url."https://${{ secrets.PAT }}@github.com/".insteadOf "https://github.com/"
 
   - name: Run Neural Nexus
-    uses: brandoptics/brandOptics_ai_review_bot_action@v3
     with:
       openai_key: ${{ secrets.OPENAI_API_KEY }}
       github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### 🔹 Azure OpenAI / Foundry Configuration
+To use **Azure OpenAI Service**, simply provide the extra Azure-specific parameters. The bot will automatically switch to the Azure client.
+
+```yaml
+- uses: brandoptics/brandOptics_ai_review_bot_action@v3
+  with:
+    # Use your AZURE_API_KEY here
+    openai_key: ${{ secrets.AZURE_API_KEY }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    
+    # 1. Your Azure Endpoint (e.g. https://my-resource.openai.azure.com)
+    openai_base_url: "https://your-resource.openai.azure.com"
+    
+    # 2. Your Deployment Name (e.g. gpt-4-turbo, gpt-4o)
+    openai_model: "gpt-4-turbo"
+    
+    # 3. Required: Trigger Azure Mode
+    openai_api_type: "azure"
+    
+    # 4. Required: API Version (e.g. 2025-01-01-preview)
+    openai_api_version: "2025-01-01-preview"
 ```
 
 **Linting Rules (`analysis_options.yaml`):**
@@ -413,6 +435,7 @@ csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 - [x] **v3.9.3**: Logic Constant & False Positive Fixes
 - [x] **v3.9.4**: Global Logic Firewall (Universal Import/Magic Number Filters)
 - [x] **v3.9.5**: Custom AI Gateways & Model Freedom (Enterprise Proxy Support)
+- [x] **v3.9.6**: Native Azure OpenAI / Foundry Support
 - [x] **v3.6**: 'Fixer Mode' Fallback for simple lint errors
 - [ ] **v4.0**: Automatic Pull Request Description Generation
 - [ ] **v4.0**: JIRA / Linear Ticket Linking
