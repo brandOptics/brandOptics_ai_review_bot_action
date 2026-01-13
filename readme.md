@@ -436,6 +436,7 @@ csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 - [x] **v3.9.4**: Global Logic Firewall (Universal Import/Magic Number Filters)
 - [x] **v3.9.5**: Custom AI Gateways & Model Freedom (Enterprise Proxy Support)
 - [x] **v3.9.6**: Native Azure OpenAI / Foundry Support
+- [x] **v3.9.7**: Stability & Authenticated Integrity (Bug Fixes)
 - [x] **v3.6**: 'Fixer Mode' Fallback for simple lint errors
 - [ ] **v4.0**: Automatic Pull Request Description Generation
 - [ ] **v4.0**: JIRA / Linear Ticket Linking
