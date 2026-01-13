@@ -8,7 +8,7 @@ from pathlib import Path
 from textwrap import dedent
 from textwrap import dedent
 from openai import OpenAI, AzureOpenAI
-from github import Github
+from github import Github, Auth
 import pytz
 from datetime import datetime
 
@@ -451,6 +451,7 @@ def is_logic_suggestion(issue):
     Detects if an issue is a veiled 'Logic/Refactoring' suggestion.
     """
     t = issue.get('type', 'Standards')
+    original_code = issue.get('original_code', '')
     # SAFE TYPES: Security (Critical) and Standards (Linters) are always allowed.
     if t in ['Security', 'Standards']:
         return False
@@ -727,7 +728,9 @@ def main():
     # --- CLIENT INITIALIZATION ---
     client = get_ai_client()
 
-    gh = Github(GITHUB_TOKEN)
+    # gh = Github(GITHUB_TOKEN) -> Deprecated
+    auth = Auth.Token(GITHUB_TOKEN)
+    gh = Github(auth=auth)
 
     # --- 2) LOAD PR DATA ----------------------------------------------------
     with open(EVENT_PATH) as f:
