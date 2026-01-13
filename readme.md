@@ -161,6 +161,8 @@ jobs:
         with:
           openai_key: ${{ secrets.OPENAI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: Custom OpenAI Base URL (e.g. for proxies or Enterprise)
+          # openai_base_url: "https://your-custom-proxy.com/v1"
           # Optional: Model Selection (Default: gpt-4o)
           # openai_model: "gpt-4-turbo" 
 ```
@@ -408,6 +410,9 @@ csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 - [x] **v3.9.1**: Strict 15-Point Checklist & Refactoring Ban
 - [x] **v3.9.1**: Minimalist Developer Disclaimer
 - [x] **v3.9.2**: Logic Sterilization (Assume Correctness) & Precision Line Mapping
+- [x] **v3.9.3**: Logic Constant & False Positive Fixes
+- [x] **v3.9.4**: Global Logic Firewall (Universal Import/Magic Number Filters)
+- [x] **v3.9.5**: Custom AI Gateways & Model Freedom (Enterprise Proxy Support)
 - [x] **v3.6**: 'Fixer Mode' Fallback for simple lint errors
 - [ ] **v4.0**: Automatic Pull Request Description Generation
 - [ ] **v4.0**: JIRA / Linear Ticket Linking

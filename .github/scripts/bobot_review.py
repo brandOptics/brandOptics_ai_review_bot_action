@@ -11,7 +11,17 @@ from github import Github
 import pytz
 from datetime import datetime
 
-# --- 1) SETUP (Moved to main) ------------------------------------------
+# --- 1) CONFIGURATION (Global) ------------------------------------------
+# Allow user to override model (e.g., 'o1-preview', 'gpt-4-turbo')
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+
+if OPENAI_BASE_URL:
+    print(f"[INFO] Using Custom OpenAI Base URL: {OPENAI_BASE_URL}")
+    openai.base_url = OPENAI_BASE_URL
+
+# --- 2) HELPER FUNCTIONS ------------------------------------------
+
 
 # --- HELPER: LANGUAGE FENCE ---------------------------------------------
 def get_language_fence(filename):
@@ -604,7 +614,7 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
 
     try:
         resp = openai.chat.completions.create(
-            model='gpt-4o', # Using a smarter model for "Stunning" results
+            model=MODEL_NAME, # Using configured model for "Stunning" results
             messages=[
                 {'role':'system', 'content': "You are a pragmatic software architect. Output only valid JSON."},
                 {'role':'user', 'content': prompt}
@@ -636,7 +646,7 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
             )
             try:
                 fix_resp = openai.chat.completions.create(
-                    model='gpt-4o',
+                    model=MODEL_NAME,
                     messages=[
                         {'role':'system', 'content': "You are a code fixer. Output valid JSON."},
                         {'role':'user', 'content': fixer_prompt}
@@ -668,11 +678,6 @@ def main():
     EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
     TARGET_TIMEZONE_NAME = os.getenv("TARGET_TIMEZONE", "Asia/Kolkata")
     
-    # Allow user to override model (e.g., 'o1-preview', 'gpt-4-turbo')
-    # Default to 'gpt-4o' which is currently the best balance for coding.
-    # NOTE: 'gpt-5.2' is not yet available via API.
-    MODEL_NAME     = os.getenv("OPENAI_MODEL", "gpt-4o")
-
     # LOGO & BRANDING
     LOGO_URL = "https://raw.githubusercontent.com/brandOptics/brandOptics_ai_review_bot_action/main/.github/assets/bailogo.png"
 
@@ -681,6 +686,8 @@ def main():
         exit(1)
 
     openai.api_key = OPENAI_API_KEY
+    # Base URL is already set globally if present
+
     gh = Github(GITHUB_TOKEN)
 
     # --- 2) LOAD PR DATA ----------------------------------------------------
@@ -861,7 +868,7 @@ def main():
     )
     try:
         rating_resp = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL_NAME,
             messages=[{"role":"user", "content": rating_prompt}],
             max_tokens=50
         )
@@ -876,7 +883,7 @@ def main():
     def get_troll_message(username):
         try:
             troll_resp = openai.chat.completions.create(
-                model="gpt-4o-mini",
+                model=MODEL_NAME,
                 messages=[{"role":"user", "content": f"Tell one short, hilarious, random office prank or developer joke in 2 lines, possibly referencing a developer named {username}."}],
                 temperature=0.9
             )

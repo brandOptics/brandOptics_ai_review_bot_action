@@ -11,6 +11,13 @@ inputs:
   github_token:
     description: "GitHub Actions token (pass via workflow)"
     required: true
+  openai_base_url:
+    description: "Custom OpenAI Base URL (e.g. for proxies or Enterprise)"
+    required: false
+  openai_model:
+    description: "OpenAI Model to use (default: gpt-4o)"
+    required: false
+    default: "gpt-4o"
 
 runs:
   using: "composite"
@@ -485,6 +492,8 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
         TARGET_TIMEZONE: Asia/Kolkata
+        OPENAI_BASE_URL: ${{ inputs.openai_base_url }}
+        OPENAI_MODEL: ${{ inputs.openai_model }}
       run: |
         set -euo pipefail
         python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"
