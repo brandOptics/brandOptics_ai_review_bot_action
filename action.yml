@@ -18,6 +18,13 @@ inputs:
     description: "OpenAI Model to use (default: gpt-4o)"
     required: false
     default: "gpt-4o"
+  openai_api_version:
+    description: "API Version (Required for Azure, e.g., 2025-01-01-preview)"
+    required: false
+  openai_api_type:
+    description: "API Type: 'openai' or 'azure'"
+    required: false
+    default: "openai"
 
 runs:
   using: "composite"
@@ -494,6 +501,8 @@ runs:
         TARGET_TIMEZONE: Asia/Kolkata
         OPENAI_BASE_URL: ${{ inputs.openai_base_url }}
         OPENAI_MODEL: ${{ inputs.openai_model }}
+        OPENAI_API_VERSION: ${{ inputs.openai_api_version }}
+        OPENAI_API_TYPE: ${{ inputs.openai_api_type }}
       run: |
         set -euo pipefail
         python "$GITHUB_ACTION_PATH/.github/scripts/bobot_review.py"

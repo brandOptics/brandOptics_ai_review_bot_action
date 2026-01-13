@@ -6,7 +6,8 @@ import json
 import re
 from pathlib import Path
 from textwrap import dedent
-import openai
+from textwrap import dedent
+from openai import OpenAI, AzureOpenAI
 from github import Github
 import pytz
 from datetime import datetime
@@ -15,10 +16,13 @@ from datetime import datetime
 # Allow user to override model (e.g., 'o1-preview', 'gpt-4-turbo')
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4o")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+OPENAI_API_TYPE = os.getenv("OPENAI_API_TYPE", "openai").lower()
+OPENAI_API_VERSION = os.getenv("OPENAI_API_VERSION")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if OPENAI_BASE_URL:
-    print(f"[INFO] Using Custom OpenAI Base URL: {OPENAI_BASE_URL}")
-    openai.base_url = OPENAI_BASE_URL
+# Global Client (Initialized in main)
+client = None
+API_FAILED = False # Flag to track hard failures
 
 # --- 2) HELPER FUNCTIONS ------------------------------------------
 
@@ -613,7 +617,10 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
     )
 
     try:
-        resp = openai.chat.completions.create(
+        global API_FAILED
+        if API_FAILED: return [] # Fast fail if API is dead
+        
+        resp = client.chat.completions.create(
             model=MODEL_NAME, # Using configured model for "Stunning" results
             messages=[
                 {'role':'system', 'content': "You are a pragmatic software architect. Output only valid JSON."},
@@ -645,7 +652,7 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
                 "{ 'issues': [ { 'line': <int>, 'type': 'Standards', 'severity': 'Medium', 'message': '<msg>', 'analysis': 'Fixing linter error', 'original_code': '<code>', 'suggestion': '<fixed_code>' } ] }"
             )
             try:
-                fix_resp = openai.chat.completions.create(
+                fix_resp = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=[
                         {'role':'system', 'content': "You are a code fixer. Output valid JSON."},
@@ -666,13 +673,45 @@ def analyze_code_chunk(filename, patch_content, file_linter_issues=[], full_sour
 
     except Exception as e:
         print(f"Error analyzing {filename}: {e}")
+        # Global failure flag for visibility
+        API_FAILED = True
         return []
+
+def get_ai_client():
+    """
+    Initializes and returns the appropriate OpenAI client (Azure or Standard).
+    """
+    print(f"[INFO] Initializing AI Client... (Type: {OPENAI_API_TYPE})")
+    
+    if OPENAI_API_TYPE == "azure":
+        if not OPENAI_BASE_URL:
+            print("[ERROR] Azure requires 'openai_base_url' (your Azure Endpoint).")
+            exit(1)
+        if not OPENAI_API_VERSION:
+            print("[ERROR] Azure requires 'openai_api_version' (e.g. 2025-01-01-preview).")
+            exit(1)
+            
+        print(f"[INFO] Connecting to Azure Foundry: {OPENAI_BASE_URL} (Ver: {OPENAI_API_VERSION})")
+        return AzureOpenAI(
+            api_key=OPENAI_API_KEY,  
+            api_version=OPENAI_API_VERSION,
+            azure_endpoint=OPENAI_BASE_URL
+        )
+    else:
+        # Standard OpenAI
+        if OPENAI_BASE_URL:
+             print(f"[INFO] Using Custom Base URL: {OPENAI_BASE_URL}")
+        
+        return OpenAI(
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL # None by default is fine
+        )
 
 def main():
     # --- 1) SETUP ----------------------------------------------------------
-    global OPENAI_API_KEY, GITHUB_TOKEN, REPO_NAME, EVENT_PATH, TARGET_TIMEZONE_NAME, LOGO_URL, openai, gh, pr_number, full_sha, repo, pr, MODEL_NAME, MODEL_NAME
+    global GITHUB_TOKEN, REPO_NAME, EVENT_PATH, TARGET_TIMEZONE_NAME, LOGO_URL, client, gh, pr_number, full_sha, repo, pr
 
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    # Env vars loaded globally now, just grab the rest
     GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
     REPO_NAME      = os.getenv("GITHUB_REPOSITORY")
     EVENT_PATH     = os.getenv("GITHUB_EVENT_PATH")
@@ -685,8 +724,8 @@ def main():
         print("[ERROR] Missing OpenAI or GitHub token.")
         exit(1)
 
-    openai.api_key = OPENAI_API_KEY
-    # Base URL is already set globally if present
+    # --- CLIENT INITIALIZATION ---
+    client = get_ai_client()
 
     gh = Github(GITHUB_TOKEN)
 
@@ -867,7 +906,7 @@ def main():
         "Separated by a pipe symbol |."
     )
     try:
-        rating_resp = openai.chat.completions.create(
+        rating_resp = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role":"user", "content": rating_prompt}],
             max_tokens=50
@@ -882,7 +921,7 @@ def main():
 
     def get_troll_message(username):
         try:
-            troll_resp = openai.chat.completions.create(
+            troll_resp = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[{"role":"user", "content": f"Tell one short, hilarious, random office prank or developer joke in 2 lines, possibly referencing a developer named {username}."}],
                 temperature=0.9
@@ -924,7 +963,14 @@ def main():
     md.append(f"    <img src='{b_sec}' />\n    <img src='{b_perf}' />\n    <img src='{b_qual}' />\n  </p>\n</div>\n")
     md.append("\n---\n")
 
-    # 7b) PR OVERVIEW (From "Old" Bot - Clean Summary)
+    # 7b) PR OVERVIEW / API HEALTH CHECK
+    if API_FAILED:
+        md.append("\n### ⚠️ Critical System Notice")
+        md.append("> **The AI Review Engine encountered connection errors.**")
+        md.append("> *Possible causes: Invalid API Key, Rate Limits, or Firewall blocks (Azure).*")
+        md.append("> *Partial results may be shown below.*")
+        md.append("\n---\n")
+
     # 7b) CRITICAL FOCUS (Immediate Attention)
     top_issues = [i for i in all_issues if i['severity'] == "High"]
 
